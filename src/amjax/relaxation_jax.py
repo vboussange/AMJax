@@ -1,4 +1,4 @@
-"""Méthodes de relaxation — pur JAX."""
+"""Méthodes de relaxation."""
 
 import jax.numpy as jnp
 from jax import lax
@@ -42,11 +42,6 @@ def jacobi(A, x, b, Dinv, iterations=1, omega=1.0):
     iterations : nombre de sweeps
     omega      : paramètre d'amortissement
     """
-    print("jacobi_jax called")
-    print("type(A)   =", type(A))
-    print("type(x)   =", type(x))
-    print("type(b)   =", type(b))
-    print("type(A@x) =", type(A @ x))
 
     def body(_, xk):
         # Jacobi pas besoin du numéro d'itération i, on fait la même chose à chaque tour donc "_"

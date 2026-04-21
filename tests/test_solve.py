@@ -26,7 +26,7 @@ def make_solver(n):
 
 @pytest.mark.parametrize("n", [10, 20, 50])
 def test_vcycle_residual(n):
-    """Le résidu relatif après solve doit être < 1e-8."""
+    """Le résidu relatif après solve doit être < 1e-8"""
     A, ml = make_solver(n)
     b = jnp.array(np.random.default_rng(0).random(n * n))
 
@@ -38,7 +38,7 @@ def test_vcycle_residual(n):
 
 @pytest.mark.parametrize("n", [10, 20, 50])
 def test_vcycle_accuracy(n):
-    """La solution JAX doit être proche de spsolve (RMSE < 1e-7)."""
+    """La solution JAX doit être proche de spsolve (RMSE < 1e-7)"""
 
     A, ml = make_solver(n)
     b     = np.random.default_rng(1).random(n * n)
@@ -53,7 +53,7 @@ def test_vcycle_accuracy(n):
 
 @pytest.mark.parametrize("n", [10, 20, 50])
 def test_pcg_residual(n):
-    """PCG préconditionné par un V-cycle doit converger (résidu < 1e-8)."""
+    """PCG préconditionné par un V-cycle doit converger (résidu < 1e-8)"""
     A, ml = make_solver(n)
     b = jnp.array(np.random.default_rng(2).random(n * n))
 
