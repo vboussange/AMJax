@@ -6,9 +6,6 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax.experimental import sparse as jsparse
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "pyamg"))
 from pyamg.multilevel import MultilevelSolver
 
 from . import relaxation_jax as relaxation
