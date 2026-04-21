@@ -1,0 +1,20 @@
+[project]
+name = "amjax"
+version = "0.1.0"
+description = "JAX based algebraic multigrid solver"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "jax>=0.10.0",
+    "numpy>=2.4.4",
+    "pyamg>=5.3.0",
+    "scipy>=1.17.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/amjax"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
