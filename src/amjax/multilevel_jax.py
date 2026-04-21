@@ -8,8 +8,8 @@ from jax import lax
 from jax.experimental import sparse as jsparse
 from pyamg.multilevel import MultilevelSolver
 
-import src.amjax.relaxation_jax as relaxation
-import src.amjax.smoothing_jax as smoothing
+from . import relaxation_jax as relaxation
+from . import smoothing_jax as smoothing
 
 
 # ---------------------------------------------------------------------------

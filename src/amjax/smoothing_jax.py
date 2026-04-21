@@ -1,6 +1,6 @@
 """Configuration des lisseurs pour le solveur multigrille JAX."""
 
-import src.amjax.relaxation_jax as relaxation
+from . import relaxation_jax as relaxation
 
 # Nombre d'itérations par défaut
 DEFAULT_NITER = 1
