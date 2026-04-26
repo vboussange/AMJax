@@ -1,20 +1,32 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
 [project]
 name = "amjax"
+authors = [
+    {email = "vic.boussange@gmail.com", name = "Victor Boussange"}
+]
+maintainers = [
+    {email = "vic.boussange@gmail.com", name = "Victor Boussange"}
+]
+
 version = "0.1.0"
-description = "JAX based algebraic multigrid solver"
+description = "JAX Algebraic Multigrid Solvers in Python"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "jax>=0.10.0",
-    "numpy>=2.4.4",
-    "pyamg>=5.3.0",
-    "scipy>=1.17.1",
+    "jax",
+    "numpy",
+    "pyamg",
+    "scipy>=1.11.0",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/amjax"]
-
-[dependency-groups]
-dev = [
-    "pytest>=9.0.3",
+[project.optional-dependencies]
+tests = [
+    "pytest",
 ]
+
+[project.urls]
+Documentation = "https://github.com/vboussange/AMJax#readme"
+Source = "https://github.com/vboussange/AMJax"

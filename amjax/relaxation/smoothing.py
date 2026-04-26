@@ -1,28 +1,46 @@
-"""Configuration des lisseurs pour le solveur multigrille JAX."""
+"""Smoother setup and configuration for the JAX multigrid solver.
 
-from . import relaxation_jax as relaxation
+All ``setup_*`` functions share the same interface:
 
-# Nombre d'itérations par défaut
+Parameters
+----------
+lvl : _Level
+    The multigrid level for which to build the smoother.
+**kwargs
+    Method-specific keyword arguments (e.g. ``iterations``, ``omega``).
+
+Returns
+-------
+callable
+    A smoother with signature ``(A, x, b) -> x``.
+
+See Also
+--------
+change_smoothers : Assign smoothers to all levels of a hierarchy.
+"""
+
+from .. import relaxation as relaxation
+
+# Default number of smoothing sweeps per level
 DEFAULT_NITER = 1
 
-# Schémas symétriques -> presmother = postsmoother
+# Smoothers that satisfy pre == post symmetry for conjugate-gradient compatibility
 SYMMETRIC_RELAXATION = ["jacobi", None]
 
 
 # ---------------------------------------------------------------------------
-# Helpers internes
+# Internal helpers
 # ---------------------------------------------------------------------------
 
 def _unpack_arg(v):
-    # Un utilisateur peut spécifier un smoother de deux façons,
-    # cette fonction normalise les deux formats en (nom, kwargs).
+    """Return a ``(name, kwargs)`` pair from a smoother specification."""
     if isinstance(v, tuple):
         return v[0], v[1]
     return v, {}
 
 
 def _as_list(v):
-    """Encapsule une spec lisseur dans une liste si nécessaire."""
+    """Wrap a smoother specification in a list if it is not already one."""
     if isinstance(v, list):
         return v
     if isinstance(v, (str, tuple)) or v is None:
@@ -31,33 +49,60 @@ def _as_list(v):
 
 
 def _expand_to_n(specs, n):
-    """Étendre au bon nombre de niveaux
-    """
-    # si la hiérarchie a 4 niveaux non-grossiers mais l'utilisateur n'a spécifié qu'un smoother, ça le répète 4x
+    """Repeat the last specification until the list has ``n`` entries."""
     if not specs:
         raise ValueError("Empty smoother specification.")
     return (specs + [specs[-1]] * n)[:n]
 
 
 def _bake_kwargs(kw, smoother):
-    """Remplace withrho=True par l'omega concret calculé à la construction.
+    """Replace ``withrho=True`` with the concrete omega resolved at construction time.
 
-    Nécessaire pour que rebuild_smoother ne calcule pas le rayon spectral
-    pendant le tracing JIT.
+    Ensures that ``rebuild_smoother`` never triggers spectral-radius
+    estimation during JAX tracing.
+
+    Parameters
+    ----------
+    kw : dict
+        Raw keyword arguments as supplied by the user.
+    smoother : callable
+        Smoother returned by ``setup_jacobi``, carrying a ``_omega`` attribute.
+
+    Returns
+    -------
+    dict
+        Keyword arguments with ``withrho`` removed and ``omega`` set to the
+        concrete scalar computed at setup time.
     """
     if not kw.get("withrho", False):
         return dict(kw)
     return {**kw, "omega": smoother._omega, "withrho": False}
-    # ici on copie les kwargs, on écrase oméga avec la avleur concrète déjà calculée 
-    # et on passe withrho à False
 
 
 # ---------------------------------------------------------------------------
-# Fonctions de construction des lisseurs
+# Smoother constructors
 # ---------------------------------------------------------------------------
 
 def setup_jacobi(lvl, iterations=DEFAULT_NITER, omega=1.0, withrho=False):
-    """Construit un lisseur Jacobi amorti."""
+    """Build a damped Jacobi smoother for the given level.
+
+    Parameters
+    ----------
+    lvl : _Level
+        Multigrid level.  ``lvl.Dinv`` is computed here if not already set.
+    iterations : int
+        Number of Jacobi sweeps per call.
+    omega : scalar
+        Damping parameter.  When ``withrho=True`` this value is divided by
+        the estimated spectral radius of D^{-1} A.
+    withrho : bool
+        If True, scale ``omega`` by ``1 / rho(D^{-1} A)``.
+
+    Returns
+    -------
+    callable
+        Smoother ``(A, x, b) -> x`` implementing damped Jacobi.
+    """
     if getattr(lvl, "Dinv", None) is None:
         lvl.Dinv = relaxation.inverse_diagonal(lvl.A)
     Dinv = lvl.Dinv
@@ -70,13 +115,17 @@ def setup_jacobi(lvl, iterations=DEFAULT_NITER, omega=1.0, withrho=False):
         return relaxation.jacobi(A, x, b, Dinv, iterations=iterations, omega=omega)
 
     smoother.__name__ = "jacobi"
-    smoother._omega = omega   # omega concret, utilisé par _bake_kwargs
+    smoother._omega = omega
     return smoother
 
 
 def setup_none(lvl, **kwargs):
-    """Lisseur identité, ne fait rien
-    -> utile pour désactiver le pré/post lissage sur niveau spécifique
+    """Build an identity smoother that leaves x unchanged.
+
+    Returns
+    -------
+    callable
+        Smoother ``(A, x, b) -> x`` that returns x unmodified.
     """
     del lvl, kwargs
 
@@ -89,11 +138,11 @@ def setup_none(lvl, **kwargs):
 
 
 # ---------------------------------------------------------------------------
-# Registre des lisseurs
+# Smoother registry
 # ---------------------------------------------------------------------------
 
 def _setup_call(fn):
-    """Retourne la fonction de construction correspondant au nom du lisseur."""
+    """Return the setup function registered under smoother name ``fn``."""
     _REGISTRY = {
         "jacobi": setup_jacobi,
         "none":   setup_none,
@@ -114,28 +163,31 @@ def _setup_call(fn):
 
 
 # ---------------------------------------------------------------------------
-# API publique
+# Public API
 # ---------------------------------------------------------------------------
 
 def change_smoothers(ml, presmoother, postsmoother):
-    """Assigne les pré- et post-lisseurs à chaque niveau non-grossier de ml.
+    """Assign pre- and post-smoothers to every non-coarse level of ``ml``.
 
-    Chaque niveau reçoit :
-      - lvl.presmoother        : callable (A, x, b) -> x
-      - lvl.postsmoother       : callable (A, x, b) -> x
-      - lvl._presmoother_spec  : (nom, kwargs) utilisés par rebuild_smoother
-      - lvl._postsmoother_spec : (nom, kwargs)
+    Each level receives ``presmoother``, ``postsmoother``,
+    ``_presmoother_spec``, and ``_postsmoother_spec`` attributes.
+    Sets ``ml.symmetric_smoothing = True`` when pre- and post-smoothers are
+    identical and listed in ``SYMMETRIC_RELAXATION``.
 
-    Met ml.symmetric_smoothing = True si pré == post et les deux sont dans
-    SYMMETRIC_RELAXATION (requis pour la compatibilité gradient conjugué).
-
-    Paramètres
+    Parameters
     ----------
-    ml           : MultilevelSolverJAX
-    presmoother  : str, tuple, liste ou None
-        (1) nom d'un lisseur, (2) tuple ('méthode', kwargs),
-        ou (3) liste de ces options (une par niveau).
-    postsmoother : str, tuple, liste ou None — même format que presmoother.
+    ml : MultilevelSolverJAX
+        Multigrid hierarchy to configure.
+    presmoother : str, tuple, list, or None
+        Smoother specification.  Accepted forms:
+
+        * ``str``   — smoother name, e.g. ``'jacobi'``
+        * ``tuple`` — ``('method', kwargs_dict)``
+        * ``list``  — one specification per non-coarse level (last entry is
+          repeated if the list is shorter than the number of levels)
+        * ``None``  — identity smoother (no relaxation)
+    postsmoother : str, tuple, list, or None
+        Same format as ``presmoother``.
     """
     n = len(ml.levels[:-1])
     if n == 0:
@@ -154,8 +206,6 @@ def change_smoothers(ml, presmoother, postsmoother):
         lvl.presmoother  = _setup_call(pre_fn)(lvl,  **pre_kw)
         lvl.postsmoother = _setup_call(post_fn)(lvl, **post_kw)
 
-        # On stocke l'omega concret (pas withrho=True) pour que rebuild_smoother
-        # soit sûr pendant le tracing JIT.
         lvl._presmoother_spec  = (pre_fn,  _bake_kwargs(pre_kw,  lvl.presmoother))
         lvl._postsmoother_spec = (post_fn, _bake_kwargs(post_kw, lvl.postsmoother))
 
@@ -166,19 +216,27 @@ def change_smoothers(ml, presmoother, postsmoother):
 
 
 def rebuild_smoother(lvl):
-    """Reconstruit les callables pré/post-lisseur depuis les specs stockées.
+    """Reconstruct pre- and post-smoother callables from stored specifications.
 
-    Appelée après un unflatten JAX pour que les closures capturent
-    le bon lvl.Dinv fraîchement reconstruit.
+    Called after a JAX pytree unflatten so that closures capture the
+    freshly reconstructed ``lvl.Dinv``.
+
+    Parameters
+    ----------
+    lvl : _Level
+        A non-coarse level with ``_presmoother_spec`` and
+        ``_postsmoother_spec`` attributes set.
+
+    Raises
+    ------
+    AttributeError
+        If ``_presmoother_spec`` or ``_postsmoother_spec`` is missing.
     """
     if getattr(lvl, "_presmoother_spec", None) is None:
         raise AttributeError("Missing _presmoother_spec on level.")
     if getattr(lvl, "_postsmoother_spec", None) is None:
         raise AttributeError("Missing _postsmoother_spec on level.")
 
-    # La version JAX stocke les kwargs explicitement:
-    # lvl._presmoother_spec[0], tuple stocké explicitement
-    # lvl._presmoother_spec[1], dict stocké explicitement
     fn1, kw1 = lvl._presmoother_spec
     fn2, kw2 = lvl._postsmoother_spec
     lvl.presmoother  = _setup_call(fn1)(lvl, **kw1)

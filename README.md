@@ -34,6 +34,10 @@ x     = solve(ml, b)
 - AMG-preconditioned CG via `jax.scipy.sparse.linalg.cg`
 - Compatible with `jax.vmap` for batched solves
 
+## Benchmark
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/rss.ipynb)
+
 ## Tests
 
 ```bash
