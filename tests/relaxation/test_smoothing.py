@@ -82,7 +82,7 @@ class TestRebuildSmoother(TestCase):
 
         # update A and Dinv, then rebuild closures
         A_new = jsparse.BCOO.from_scipy_sparse(eye_array(A_scipy.shape[0], format='csr'))
-        lvl.A    = A_new
+        lvl.A = A_new
         lvl.Dinv = inverse_diagonal(A_new)
         rebuild_smoother(lvl)
 
