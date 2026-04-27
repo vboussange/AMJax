@@ -16,7 +16,7 @@ description = "JAX Algebraic Multigrid Solvers in Python"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "jax>=0.9.0",
+    "jax>=0.6.1",
     "numpy>2.4.0",
     "pyamg>=4.0.0",
     "scipy>=1.11.0",
