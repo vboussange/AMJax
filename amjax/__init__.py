@@ -1,9 +1,9 @@
-from .multilevel import MultilevelSolverJAX
+from .multilevel import AMJAXSolver
 from .relaxation.smoothing import change_smoothers
 from .relaxation.relaxation import jacobi, inverse_diagonal
 
 __all__ = [
-    "MultilevelSolverJAX",
+    "AMJAXSolver",
     "change_smoothers",
     "jacobi",
     "inverse_diagonal",

@@ -7,7 +7,7 @@ from jax.experimental import sparse as jsparse
 import pyamg
 from pyamg.gallery import poisson
 
-from amjax.multilevel import MultilevelSolverJAX
+from amjax.multilevel import AMJAXSolver
 from amjax.relaxation.smoothing import change_smoothers, rebuild_smoother
 
 jax.config.update("jax_enable_x64", True)
@@ -39,7 +39,7 @@ class TestSmoothing(TestCase):
 
     def test_solver_parameters(self):
         for method in methods_sym:
-            ml = MultilevelSolverJAX.from_pyamg(
+            ml = AMJAXSolver.from_pyamg(
                 self.pyamg_ml,
                 presmoother=method,
                 postsmoother=method,
@@ -49,7 +49,7 @@ class TestSmoothing(TestCase):
             assert ml.symmetric_smoothing
 
         for method in methods_none:
-            ml = MultilevelSolverJAX.from_pyamg(
+            ml = AMJAXSolver.from_pyamg(
                 self.pyamg_ml,
                 presmoother=method,
                 postsmoother=method,
@@ -57,7 +57,7 @@ class TestSmoothing(TestCase):
             assert ml.symmetric_smoothing
 
         for pre, post in methods_asym:
-            ml = MultilevelSolverJAX.from_pyamg(self.pyamg_ml)
+            ml = AMJAXSolver.from_pyamg(self.pyamg_ml)
             change_smoothers(ml, presmoother=pre, postsmoother=post)
             assert not ml.symmetric_smoothing
 
@@ -70,7 +70,7 @@ class TestRebuildSmoother(TestCase):
 
         A_scipy = poisson((20,), format='csr')
         pyamg_ml = pyamg.ruge_stuben_solver(A_scipy, coarse_solver='jacobi')
-        ml = MultilevelSolverJAX.from_pyamg(
+        ml = AMJAXSolver.from_pyamg(
             pyamg_ml,
             presmoother=('jacobi', {'iterations': 1}),
             postsmoother=None,

@@ -1,4 +1,4 @@
-"""Test MultilevelSolverJAX class."""
+"""Test AMJAXSolver class."""
 import numpy as np
 from numpy.testing import TestCase, assert_almost_equal, assert_equal
 import jax
@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax.experimental import sparse as jsparse
 from pyamg.gallery import poisson
 
-from amjax.multilevel import coarse_grid_solver, MultilevelSolverJAX
+from amjax.multilevel import coarse_grid_solver, AMJAXSolver
 from amjax.relaxation.relaxation import inverse_diagonal
 
 jax.config.update("jax_enable_x64", True)
@@ -21,7 +21,7 @@ class TestMultilevel(TestCase):
 
         # only 'jacobi' is supported as a coarse solver in AMJax
         for A in cases:
-            lvl = MultilevelSolverJAX.Level()
+            lvl = AMJAXSolver.Level()
             lvl.A = A
             lvl.Dinv = inverse_diagonal(A)
 
@@ -46,7 +46,7 @@ class TestMultilevel(TestCase):
 
         # AMJax builds its hierarchy from a PyAMG hierarchy
         pyamg_ml = pyamg.ruge_stuben_solver(A_scipy, coarse_solver='jacobi')
-        ml = MultilevelSolverJAX.from_pyamg(
+        ml = AMJAXSolver.from_pyamg(
             pyamg_ml,
             presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
@@ -70,7 +70,7 @@ class TestMultilevel(TestCase):
 
         # AMJax builds its hierarchy from a PyAMG hierarchy
         pyamg_ml = pyamg.ruge_stuben_solver(A_scipy, coarse_solver='jacobi')
-        ml = MultilevelSolverJAX.from_pyamg(
+        ml = AMJAXSolver.from_pyamg(
             pyamg_ml,
             presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
@@ -87,35 +87,35 @@ class TestMultilevel(TestCase):
 
         # four levels — BCOO.fromdense replaces the non-existent BCOO.csr_array
         levels = []
-        levels.append(MultilevelSolverJAX.Level())
+        levels.append(AMJAXSolver.Level())
         levels[0].A = jsparse.BCOO.fromdense(jnp.ones((10, 10)))
         levels[0].P = jsparse.BCOO.fromdense(jnp.ones((10, 5)))
-        levels.append(MultilevelSolverJAX.Level())
+        levels.append(AMJAXSolver.Level())
         levels[1].A = jsparse.BCOO.fromdense(jnp.ones((5, 5)))
         levels[1].P = jsparse.BCOO.fromdense(jnp.ones((5, 3)))
-        levels.append(MultilevelSolverJAX.Level())
+        levels.append(AMJAXSolver.Level())
         levels[2].A = jsparse.BCOO.fromdense(jnp.ones((3, 3)))
         levels[2].P = jsparse.BCOO.fromdense(jnp.ones((3, 2)))
-        levels.append(MultilevelSolverJAX.Level())
+        levels.append(AMJAXSolver.Level())
         levels[3].A = jsparse.BCOO.fromdense(jnp.ones((2, 2)))
 
         # one level hierarchy
-        mg = MultilevelSolverJAX(levels[:1], dummy_solver)
+        mg = AMJAXSolver(levels[:1], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 100.0/100.0)  # 1
         assert_equal(mg.cycle_complexity(cycle='W'), 100.0/100.0)  # 1
 
         # two level hierarchy
-        mg = MultilevelSolverJAX(levels[:2], dummy_solver)
+        mg = AMJAXSolver(levels[:2], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 225.0/100.0)  # 2,1
         assert_equal(mg.cycle_complexity(cycle='W'), 225.0/100.0)  # 2,1
 
         # three level hierarchy
-        mg = MultilevelSolverJAX(levels[:3], dummy_solver)
+        mg = AMJAXSolver(levels[:3], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 259.0/100.0)  # 2,2,1
         assert_equal(mg.cycle_complexity(cycle='W'), 318.0/100.0)  # 2,4,2
 
         # four level hierarchy
-        mg = MultilevelSolverJAX(levels[:4], dummy_solver)
+        mg = AMJAXSolver(levels[:4], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 272.0/100.0)  # 2,2,2,1
         assert_equal(mg.cycle_complexity(cycle='W'), 388.0/100.0)  # 2,4,8,4
 
@@ -131,7 +131,7 @@ class TestPrecisionMultilevel(TestCase):
             diag_vals = jnp.array(np.arange(1, 5, dtype=np.float64), dtype=dtype)
             A = jsparse.BCOO.fromdense(jnp.diag(diag_vals))
 
-            lvl = MultilevelSolverJAX.Level()
+            lvl = AMJAXSolver.Level()
             lvl.A = A
             lvl.Dinv = inverse_diagonal(A)
 

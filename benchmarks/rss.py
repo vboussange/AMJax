@@ -1,3 +1,5 @@
+"""Benchmark comparing AMJax and PyAMG Ruge-Stüben solvers on 2-D Poisson problems."""
+
 import os
 
 USE_CPU = True  # set to False to use GPU if available
@@ -12,7 +14,7 @@ import matplotlib.pyplot as plt
 import timeit
 import jax.numpy as jnp
 
-from amjax import MultilevelSolverJAX
+from amjax import AMJAXSolver
 from pyamg.relaxation.smoothing import change_smoothers
 from scipy.sparse.linalg import cg
 from amjax.plots import plot_runtime, plot_residual, plot_memory, plot_float_precision
@@ -126,12 +128,12 @@ for n in grid_size:
 
     ml = pyamg.ruge_stuben_solver(A, coarse_solver="jacobi")
     change_smoothers(ml, presmoother="jacobi", postsmoother="jacobi")
-    ml_jax = MultilevelSolverJAX.from_pyamg(
+    ml_jax = AMJAXSolver.from_pyamg(
         ml,
         presmoother=("jacobi", {"iterations": 1, "withrho": True}),
         postsmoother=("jacobi", {"iterations": 1, "withrho": True}),
     )
-    ml_f32 = cast_solver(MultilevelSolverJAX.from_pyamg(
+    ml_f32 = cast_solver(AMJAXSolver.from_pyamg(
         ml,
         presmoother=("jacobi", {"iterations": 1, "withrho": True}),
         postsmoother=("jacobi", {"iterations": 1, "withrho": True}),

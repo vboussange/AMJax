@@ -10,18 +10,24 @@ Built on top of [PyAMG](https://github.com/pyamg/pyamg) for hierarchy constructi
 pip install amjax
 ```
 
+Or with `uv`:
+
+```bash
+uv add amjax
+```
+
 ## Usage
 
 ```python
 import pyamg
 import jax
 import jax.numpy as jnp
-from amjax import MultilevelSolverJAX
+from amjax import AMJAXSolver
 
 A  = pyamg.gallery.poisson((100, 100), format="csr")
 b  = jnp.ones(A.shape[0])
 
-ml = MultilevelSolverJAX.from_pyamg(pyamg.ruge_stuben_solver(A))
+ml = AMJAXSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
 
 solve = jax.jit(lambda ml, b: ml.solve(b, tol=1e-10, maxiter=100))
 x     = solve(ml, b)

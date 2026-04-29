@@ -40,7 +40,7 @@ class _Level:
 
     Notes
     -----
-    Defined outside ``MultilevelSolverJAX`` so that ``_flatten`` and
+    Defined outside ``AMJAXSolver`` so that ``_flatten`` and
     ``_unflatten`` can reference it without a circular dependency.
     """
 
@@ -59,7 +59,7 @@ class _Level:
 # Solver class
 # ---------------------------------------------------------------------------
 
-class MultilevelSolverJAX(MultilevelSolver):
+class AMJAXSolver(MultilevelSolver):
     """JAX-compatible algebraic multigrid solver.
 
     Extends ``pyamg.multilevel.MultilevelSolver`` with a JAX-traceable V-cycle
@@ -152,7 +152,7 @@ class MultilevelSolverJAX(MultilevelSolver):
 
         Returns
         -------
-        MultilevelSolverJAX
+        AMJAXSolver
             Fully initialised JAX multigrid hierarchy.
         """
         if coarse_solver_kwargs is None:
@@ -177,7 +177,7 @@ class MultilevelSolverJAX(MultilevelSolver):
     def __repr__(self):
         """Return a string summary of the multigrid hierarchy."""
         total_nnz = sum(_nnz(lvl.A) for lvl in self.levels)
-        out  = "MultilevelSolverJAX\n"
+        out  = "AMJAXSolver\n"
         out += f"Number of Levels:    {len(self.levels)}\n"
         out += f"Operator Complexity: {self.operator_complexity():6.3f}\n"
         out += f"Grid Complexity:     {self.grid_complexity():6.3f}\n"
@@ -262,7 +262,7 @@ class MultilevelSolverJAX(MultilevelSolver):
 
         See Also
         --------
-        MultilevelSolverJAX.solve
+        AMJAXSolver.solve
         """
         def matvec(b):
             b = jnp.ravel(jnp.asarray(b))
@@ -329,7 +329,7 @@ class MultilevelSolverJAX(MultilevelSolver):
 
         Compatible with ``jax.jit``::
 
-            solve_jit = jax.jit(MultilevelSolverJAX.solve)
+            solve_jit = jax.jit(AMJAXSolver.solve)
             x = solve_jit(ml, b)
 
         Parameters
@@ -473,7 +473,7 @@ def _convert_hierarchy(pyamg_solver):
 # ---------------------------------------------------------------------------
 # JAX pytree registration
 # ---------------------------------------------------------------------------
-# Allows jax.jit, jax.grad, etc. to treat MultilevelSolverJAX as a pytree.
+# Allows jax.jit, jax.grad, etc. to treat AMJAXSolver as a pytree.
 # _flatten  : decomposes the hierarchy into JAX array leaves + static metadata.
 # _unflatten: reconstructs the hierarchy from leaves + metadata.
 
@@ -523,7 +523,7 @@ def _unflatten(aux, leaves):
         aux["coarse_solver_name"], coarse_lvl, **coarse_kw
     )
 
-    ml = MultilevelSolverJAX(
+    ml = AMJAXSolver(
         levels, coarse_fn,
         coarse_solver_name=aux["coarse_solver_name"],
         coarse_solver_kwargs=coarse_kw,
@@ -540,7 +540,7 @@ def _unflatten(aux, leaves):
 
 
 jax.tree_util.register_pytree_node(
-    MultilevelSolverJAX,
+    AMJAXSolver,
     _flatten,
     _unflatten,
 )
@@ -549,17 +549,17 @@ jax.tree_util.register_pytree_node(
 # Deprecated alias
 # ---------------------------------------------------------------------------
 
-class multilevel_solver(MultilevelSolverJAX):  # noqa: N801
-    """Deprecated alias for ``MultilevelSolverJAX``.
+class multilevel_solver(AMJAXSolver):  # noqa: N801
+    """Deprecated alias for ``AMJAXSolver``.
 
     .. deprecated::
-        Use ``MultilevelSolverJAX`` instead.
+        Use ``AMJAXSolver`` instead.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         warn(
-            "multilevel_solver is deprecated. Use MultilevelSolverJAX.",
+            "multilevel_solver is deprecated. Use AMJAXSolver.",
             DeprecationWarning,
             stacklevel=2,
         )
