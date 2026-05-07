@@ -28,10 +28,6 @@ DEFAULT_NITER = 1
 SYMMETRIC_RELAXATION = ["jacobi", None]
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 def _unpack_arg(v):
     """Return a ``(name, kwargs)`` pair from a smoother specification."""
     if isinstance(v, tuple):
@@ -78,10 +74,6 @@ def _bake_kwargs(kw, smoother):
         return dict(kw)
     return {**kw, "omega": smoother._omega, "withrho": False}
 
-
-# ---------------------------------------------------------------------------
-# Smoother constructors
-# ---------------------------------------------------------------------------
 
 def setup_jacobi(lvl, iterations=DEFAULT_NITER, omega=1.0, withrho=False):
     """Build a damped Jacobi smoother for the given level.
@@ -137,10 +129,6 @@ def setup_none(lvl, **kwargs):
     return smoother
 
 
-# ---------------------------------------------------------------------------
-# Smoother registry
-# ---------------------------------------------------------------------------
-
 def _setup_call(fn):
     """Return the setup function registered under smoother name ``fn``."""
     _REGISTRY = {
@@ -161,10 +149,6 @@ def _setup_call(fn):
 
     return _REGISTRY[fn]
 
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 def change_smoothers(ml, presmoother, postsmoother):
     """Assign pre- and post-smoothers to every non-coarse level of ``ml``.

@@ -6,15 +6,11 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax.experimental import sparse as jsparse
-from pyamg.multilevel import MultilevelSolver
+from pyamg.multilevel import MultilevelSolver as PyAMGSolver
 
 from .relaxation import relaxation as relaxation
 from .relaxation import smoothing as smoothing
 
-
-# ---------------------------------------------------------------------------
-# Level class
-# ---------------------------------------------------------------------------
 
 class _Level:
     """One level of the multigrid hierarchy.
@@ -40,7 +36,7 @@ class _Level:
 
     Notes
     -----
-    Defined outside ``AMJAXSolver`` so that ``_flatten`` and
+    Defined outside ``MultilevelSolver`` so that ``_flatten`` and
     ``_unflatten`` can reference it without a circular dependency.
     """
 
@@ -55,11 +51,7 @@ class _Level:
         self._postsmoother_spec = None
 
 
-# ---------------------------------------------------------------------------
-# Solver class
-# ---------------------------------------------------------------------------
-
-class AMJAXSolver(MultilevelSolver):
+class MultilevelSolver(PyAMGSolver):
     """JAX-compatible algebraic multigrid solver.
 
     Extends ``pyamg.multilevel.MultilevelSolver`` with a JAX-traceable V-cycle
@@ -121,10 +113,6 @@ class AMJAXSolver(MultilevelSolver):
             if getattr(lvl, "R", None) is None:
                 lvl.R = lvl.P.T
 
-    # ------------------------------------------------------------------
-    # Construction
-    # ------------------------------------------------------------------
-
     @classmethod
     def from_pyamg(
         cls,
@@ -152,7 +140,7 @@ class AMJAXSolver(MultilevelSolver):
 
         Returns
         -------
-        AMJAXSolver
+        MultilevelSolver
             Fully initialised JAX multigrid hierarchy.
         """
         if coarse_solver_kwargs is None:
@@ -170,14 +158,10 @@ class AMJAXSolver(MultilevelSolver):
         smoothing.change_smoothers(ml, presmoother, postsmoother)
         return ml
 
-    # ------------------------------------------------------------------
-    # Diagnostics
-    # ------------------------------------------------------------------
-
     def __repr__(self):
         """Return a string summary of the multigrid hierarchy."""
         total_nnz = sum(_nnz(lvl.A) for lvl in self.levels)
-        out  = "AMJAXSolver\n"
+        out  = "MultilevelSolver\n"
         out += f"Number of Levels:    {len(self.levels)}\n"
         out += f"Operator Complexity: {self.operator_complexity():6.3f}\n"
         out += f"Grid Complexity:     {self.grid_complexity():6.3f}\n"
@@ -242,10 +226,6 @@ class AMJAXSolver(MultilevelSolver):
 
         return float(flops) / float(nnz[0])
 
-    # ------------------------------------------------------------------
-    # Preconditioner
-    # ------------------------------------------------------------------
-
     def aspreconditioner(self, cycle='V'):
         """Return a JAX-compatible preconditioner applying one multigrid cycle.
 
@@ -262,7 +242,7 @@ class AMJAXSolver(MultilevelSolver):
 
         See Also
         --------
-        AMJAXSolver.solve
+        MultilevelSolver.solve
         """
         def matvec(b):
             b = jnp.ravel(jnp.asarray(b))
@@ -270,10 +250,6 @@ class AMJAXSolver(MultilevelSolver):
             return self._cycle(x, b, cycle=cycle)
 
         return matvec
-
-    # ------------------------------------------------------------------
-    # Multigrid cycle — pure JAX
-    # ------------------------------------------------------------------
 
     def _cycle(self, x, b, cycle="V"):
         """Apply one V-cycle of the multigrid algorithm.
@@ -300,7 +276,7 @@ class AMJAXSolver(MultilevelSolver):
 
         xs, bs = [], []
 
-        # --- Fine to coarse ---
+        # Fine to coarse 
         for l in range(len(self.levels) - 1):
             lvl = self.levels[l]
             x   = lvl.presmoother(lvl.A, x, b)
@@ -309,10 +285,10 @@ class AMJAXSolver(MultilevelSolver):
             b = lvl.R @ (b - lvl.A @ x)
             x = jnp.zeros_like(b)
 
-        # --- Coarse-grid solve ---
+        # Coarse-grid solve 
         x = self.coarse_solver(self.levels[-1].A, x, b)
 
-        # --- Coarse to fine ---
+        # Coarse to fine 
         for l in range(len(self.levels) - 2, -1, -1):
             lvl = self.levels[l]
             x   = xs[l] + lvl.P @ x
@@ -320,16 +296,12 @@ class AMJAXSolver(MultilevelSolver):
 
         return x
 
-    # ------------------------------------------------------------------
-    # Solve loop
-    # ------------------------------------------------------------------
-
     def solve(self, b, x0=None, tol=1e-5, maxiter=100, cycle="V"):
         """Solve Ax = b by repeated multigrid cycles.
 
         Compatible with ``jax.jit``::
 
-            solve_jit = jax.jit(AMJAXSolver.solve)
+            solve_jit = jax.jit(MultilevelSolver.solve)
             x = solve_jit(ml, b)
 
         Parameters
@@ -372,10 +344,6 @@ class AMJAXSolver(MultilevelSolver):
         return x
 
 
-# ---------------------------------------------------------------------------
-# Coarse-grid solver
-# ---------------------------------------------------------------------------
-
 def coarse_grid_solver(solver_name, lvl, **kwargs):
     """Return a coarse-grid solver callable with signature ``(A, x, b) -> x``.
 
@@ -416,10 +384,6 @@ def _coarse_jacobi(Dinv, iterations=10, omega=1.0):
     solve.__name__ = "jacobi"
     return solve
 
-
-# ---------------------------------------------------------------------------
-# PyAMG hierarchy conversion
-# ---------------------------------------------------------------------------
 
 def _nnz(A):
     """Return the number of stored entries of a JAX sparse or dense array."""
@@ -470,10 +434,8 @@ def _convert_hierarchy(pyamg_solver):
     return levels
 
 
-# ---------------------------------------------------------------------------
 # JAX pytree registration
-# ---------------------------------------------------------------------------
-# Allows jax.jit, jax.grad, etc. to treat AMJAXSolver as a pytree.
+# Allows jax.jit, jax.grad, etc. to treat MultilevelSolver as a pytree.
 # _flatten  : decomposes the hierarchy into JAX array leaves + static metadata.
 # _unflatten: reconstructs the hierarchy from leaves + metadata.
 
@@ -523,7 +485,7 @@ def _unflatten(aux, leaves):
         aux["coarse_solver_name"], coarse_lvl, **coarse_kw
     )
 
-    ml = AMJAXSolver(
+    ml = MultilevelSolver(
         levels, coarse_fn,
         coarse_solver_name=aux["coarse_solver_name"],
         coarse_solver_kwargs=coarse_kw,
@@ -540,26 +502,23 @@ def _unflatten(aux, leaves):
 
 
 jax.tree_util.register_pytree_node(
-    AMJAXSolver,
+    MultilevelSolver,
     _flatten,
     _unflatten,
 )
 
-# ---------------------------------------------------------------------------
-# Deprecated alias
-# ---------------------------------------------------------------------------
 
-class multilevel_solver(AMJAXSolver):  # noqa: N801
-    """Deprecated alias for ``AMJAXSolver``.
+class multilevel_solver(MultilevelSolver):  # noqa: N801
+    """Deprecated alias for ``MultilevelSolver``.
 
     .. deprecated::
-        Use ``AMJAXSolver`` instead.
+        Use ``MultilevelSolver`` instead.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         warn(
-            "multilevel_solver is deprecated. Use AMJAXSolver.",
+            "multilevel_solver is deprecated. Use MultilevelSolver.",
             DeprecationWarning,
             stacklevel=2,
         )

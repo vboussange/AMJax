@@ -1,4 +1,4 @@
-from .multilevel import AMJAXSolver
+from .multilevel import MultilevelSolver as AMJAXSolver
 from .relaxation.smoothing import change_smoothers
 from .relaxation.relaxation import jacobi, inverse_diagonal
 

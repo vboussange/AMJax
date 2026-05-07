@@ -7,7 +7,7 @@ from jax.experimental import sparse as jsparse
 import pyamg
 from pyamg.gallery import poisson
 
-from amjax.multilevel import AMJAXSolver
+from amjax.multilevel import MultilevelSolver as AMJAXSolver
 from amjax.relaxation.smoothing import change_smoothers, rebuild_smoother
 
 jax.config.update("jax_enable_x64", True)

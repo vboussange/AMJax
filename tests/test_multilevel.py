@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax.experimental import sparse as jsparse
 from pyamg.gallery import poisson
 
-from amjax.multilevel import coarse_grid_solver, AMJAXSolver
+from amjax.multilevel import coarse_grid_solver, MultilevelSolver as AMJAXSolver
 from amjax.relaxation.relaxation import inverse_diagonal
 
 jax.config.update("jax_enable_x64", True)
@@ -60,7 +60,6 @@ class TestMultilevel(TestCase):
             # cg satisfies convergence in the Euclidean norm
             assert jnp.linalg.norm(b - A @ x) < 1e-8 * jnp.linalg.norm(b)
 
-
     def test_solve(self):
         import pyamg
         np.random.seed(30459128)
@@ -76,9 +75,28 @@ class TestMultilevel(TestCase):
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
         )
 
-        # AMJax solve runs repeated V-cycles until convergence
-        x = ml.solve(b, maxiter=100, tol=1e-8)
+        # AMJax solve is JIT-compatible
+        solve = jax.jit(lambda b: ml.solve(b, maxiter=100, tol=1e-8))
+        x = solve(b)
         assert jnp.linalg.norm(b - jsparse.BCOO.from_scipy_sparse(A_scipy) @ x) < 1e-8 * jnp.linalg.norm(b)
+
+    def test_vmap_compatibility(self):
+        import pyamg
+        np.random.seed(1883275855)
+
+        A_scipy = poisson((50, 50), format='csr')
+        B = jnp.array(np.random.rand(4, A_scipy.shape[0]))
+
+        ml = AMJAXSolver.from_pyamg(
+            pyamg.ruge_stuben_solver(A_scipy, coarse_solver='jacobi'),
+            presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+            postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+        )
+
+        solve = jax.jit(jax.vmap(lambda b: ml.solve(b, maxiter=100, tol=1e-8)))
+        X = solve(B)
+        A_jax = jsparse.BCOO.from_scipy_sparse(A_scipy)
+        assert jnp.all(jax.vmap(lambda b, x: jnp.linalg.norm(b - A_jax @ x) < 1e-8 * jnp.linalg.norm(b))(B, X))
 
     def test_cycle_complexity(self):
         def dummy_solver(A, x, b):
@@ -122,6 +140,19 @@ class TestMultilevel(TestCase):
         # AMLI and F cycles are not implemented in AMJax
         self.assertRaises(NotImplementedError, mg.cycle_complexity, 'AMLI')
         self.assertRaises(NotImplementedError, mg.cycle_complexity, 'F')
+
+    def test_from_pyamg_compatibility(self):
+        import pyamg
+        A = poisson((20, 20), format='csr')
+        for factory in [
+            pyamg.smoothed_aggregation_solver,
+            pyamg.rootnode_solver,
+            pyamg.pairwise_solver,
+            pyamg.ruge_stuben_solver,
+            pyamg.air_solver,
+        ]:
+            ml = AMJAXSolver.from_pyamg(factory(A, coarse_solver='jacobi'))
+            self.assertGreater(len(ml.levels), 1)
 
 
 class TestPrecisionMultilevel(TestCase):
