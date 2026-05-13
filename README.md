@@ -7,16 +7,13 @@ Built on top of [PyAMG](https://github.com/pyamg/pyamg) for hierarchy constructi
 > **Design note:** AMJax is not a fully JAX-native AMG implementation. The hierarchy (coarsening, prolongation/restriction operators) is built by PyAMG in NumPy/SciPy and converted to JAX sparse arrays (`BCOO`). Only the solve step runs in JAX and benefits from JIT compilation and GPU acceleration.
 
 ## Installation
+For now,
 
 ```bash
-pip install amjax
+uv add git+https://github.com/vboussange/AMJax.git
 ```
 
-Or with `uv`:
-
-```bash
-uv add amjax
-```
+but we will soon add the package to PyPi 🙃.
 
 ## Usage
 
