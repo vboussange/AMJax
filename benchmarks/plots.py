@@ -33,7 +33,7 @@ def save_results(results, filename):
     """
     out = PLOTS_DIR / filename
     out.write_text(_json.dumps(results, indent=2, cls=_Encoder))
-    print(f"Results saved → {out}")
+    print(f"Results saved: {out}")
 
 
 def load_results(filename):

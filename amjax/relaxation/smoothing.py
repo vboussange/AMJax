@@ -160,7 +160,7 @@ def change_smoothers(ml, presmoother, postsmoother):
 
     Parameters
     ----------
-    ml : AMJAXSolver
+    ml : MultilevelSolver
         Multigrid hierarchy to configure.
     presmoother : str, tuple, list, or None
         Smoother specification.  Accepted forms:

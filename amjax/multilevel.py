@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax.experimental import sparse as jsparse
-from pyamg.multilevel import MultilevelSolver as PyAMGSolver
+from pyamg.multilevel import MultilevelSolver as PyAMGMultilevelSolver
 
 from .relaxation import relaxation as relaxation
 from .relaxation import smoothing as smoothing
@@ -51,7 +51,7 @@ class _Level:
         self._postsmoother_spec = None
 
 
-class MultilevelSolver(PyAMGSolver):
+class MultilevelSolver(PyAMGMultilevelSolver):
     """JAX-compatible algebraic multigrid solver.
 
     Extends ``pyamg.multilevel.MultilevelSolver`` with a JAX-traceable V-cycle
