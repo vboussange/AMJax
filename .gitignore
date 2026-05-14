@@ -208,3 +208,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# AMJax — local benchmark config (personal, not for version control)
+benchmarks/config_local.yaml

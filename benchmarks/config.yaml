@@ -1,0 +1,65 @@
+# AMJax benchmark: full configuration
+# One JSON per parameter combination (cartesian product of all values below).
+
+# pyamg, pyamg_pcg, cg: PyAMG/SciPy solvers, sequential batch
+# amjax, amjax_pcg: AMJax solvers, sequential batch
+# amjax_vmap, amjax_pcg_vmap: AMJax solvers, vmap batch
+methods:
+  - pyamg
+  - pyamg_pcg
+  - cg
+  - amjax
+  - amjax_pcg
+  - amjax_vmap
+  - amjax_pcg_vmap
+
+grid_sizes:
+  - 50
+  - 100
+  - 200
+  - 500
+  - 1000
+
+# PyAMG hierarchy factory. 
+# Available in PyAMG: smoothed_aggregation, rootnode, pairwise, ruge_stuben, air
+solvers:
+  - smoothed_aggregation
+  - rootnode
+  - pairwise
+  - ruge_stuben
+  - air
+
+# Solver used at the coarsest grid level.
+# Available in AMJax: jacobi
+coarse_solvers:
+  - jacobi
+
+# Convergence tolerance on ||b - Ax|| / ||b||
+tol:
+  - 1.0e-10
+
+# Max V-cycle iterations
+maxiter_vcycle:
+  - 100
+
+# Max iterations for CG-based methods
+maxiter_solv:
+  - 500
+
+# Batch size K
+vmap_k:
+  - 64
+
+# Floating-point precision (f64 or f32)
+dtypes:
+  - f64
+  - f32
+
+# Multigrid cycle type.
+# Available in AMJax: V. 
+cycle_type:
+  - V
+
+# Iterative smoother applied at each level of the hierarchy (pre and postsmoother).
+# Available in AMJax: jacobi
+  - jacobi

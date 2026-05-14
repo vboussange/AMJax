@@ -1,0 +1,17 @@
+{
+  "config": {
+    "solver": "ruge_stuben",
+    "coarse_solver": "jacobi",
+    "dtype": "f64",
+    "tol": 1e-10,
+    "maxiter_vcycle": 100,
+    "maxiter_solv": 500,
+    "vmap_k": 64,
+    "cycle_type": "V",
+    "grid_size": 100,
+    "method": "amjax_pcg_vmap",
+    "smoother": "jacobi"
+  },
+  "time": 0.4009925840073265,
+  "residual": 9.422868079013332e-12
+}
