@@ -156,6 +156,35 @@ class TestMultilevel(TestCase):
 
 
 class TestPrecisionMultilevel(TestCase):
+    def test_from_pyamg_preserves_finest_level_dtype(self):
+        import pyamg
+
+        A_scipy = poisson((8, 8), format='csr').astype(np.float32)
+        ml = AMJAXSolver.from_pyamg(
+            pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
+        )
+
+        for lvl in ml.levels:
+            assert_equal(lvl.A.dtype, jnp.float32)
+            assert_equal(lvl.Dinv.dtype, jnp.float32)
+            if lvl.P is not None:
+                assert_equal(lvl.P.dtype, jnp.float32)
+            if lvl.R is not None:
+                assert_equal(lvl.R.dtype, jnp.float32)
+
+    def test_aspreconditioner_preserves_float32_hierarchy_dtype(self):
+        import pyamg
+
+        A_scipy = poisson((8, 8), format='csr').astype(np.float32)
+        ml = AMJAXSolver.from_pyamg(
+            pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
+        )
+        M = ml.aspreconditioner()
+
+        b = jnp.ones(A_scipy.shape[0], dtype=jnp.float32)
+        assert_equal(jax.eval_shape(M, b).dtype, b.dtype)
+        assert_equal(M(b).dtype, b.dtype)
+
     def test_coarse_grid_solver(self):
         # JAX defaults to float32 -> verify the coarse solver works in both precisions
         for dtype in [jnp.float32, jnp.float64]:
