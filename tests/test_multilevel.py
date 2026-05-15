@@ -156,12 +156,28 @@ class TestMultilevel(TestCase):
 
 
 class TestPrecisionMultilevel(TestCase):
-    def test_aspreconditioner_preserves_rhs_dtype(self):
+    def test_from_pyamg_preserves_finest_level_dtype(self):
         import pyamg
 
-        A_scipy = poisson((8, 8), format='csr')
+        A_scipy = poisson((8, 8), format='csr').astype(np.float32)
         ml = AMJAXSolver.from_pyamg(
-            pyamg.ruge_stuben_solver(A_scipy, coarse_solver='jacobi')
+            pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
+        )
+
+        for lvl in ml.levels:
+            assert_equal(lvl.A.dtype, jnp.float32)
+            assert_equal(lvl.Dinv.dtype, jnp.float32)
+            if lvl.P is not None:
+                assert_equal(lvl.P.dtype, jnp.float32)
+            if lvl.R is not None:
+                assert_equal(lvl.R.dtype, jnp.float32)
+
+    def test_aspreconditioner_preserves_float32_hierarchy_dtype(self):
+        import pyamg
+
+        A_scipy = poisson((8, 8), format='csr').astype(np.float32)
+        ml = AMJAXSolver.from_pyamg(
+            pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
         )
         M = ml.aspreconditioner()
 

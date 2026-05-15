@@ -245,11 +245,9 @@ class MultilevelSolver(PyAMGSolver):
         MultilevelSolver.solve
         """
         def matvec(b):
-            b_arr = jnp.asarray(b)
-            out_dtype = b_arr.dtype
-            b = jnp.ravel(b_arr).astype(jnp.result_type(b_arr, self.levels[0].A.dtype))
+            b = jnp.ravel(jnp.asarray(b))
             x = jnp.zeros_like(b)
-            return self._cycle(x, b, cycle=cycle).astype(out_dtype)
+            return self._cycle(x, b, cycle=cycle)
 
         return matvec
 
@@ -419,14 +417,18 @@ def _convert_hierarchy(pyamg_solver):
         JAX hierarchy with BCOO matrices and pre-computed diagonal inverses.
     """
     levels = []
+    dtype = None
     for py_lvl in pyamg_solver.levels:
         lvl      = _Level()
         lvl.A    = _to_jax(py_lvl.A)
+        if dtype is None:
+            dtype = lvl.A.dtype
+        lvl.A    = lvl.A.astype(dtype)
         lvl.Dinv = relaxation.inverse_diagonal(lvl.A)
         if hasattr(py_lvl, "P"):
-            lvl.P = _to_jax(py_lvl.P)
+            lvl.P = _to_jax(py_lvl.P).astype(dtype)
         if hasattr(py_lvl, "R"):
-            lvl.R = _to_jax(py_lvl.R)
+            lvl.R = _to_jax(py_lvl.R).astype(dtype)
         levels.append(lvl)
 
     for lvl in levels[:-1]:
