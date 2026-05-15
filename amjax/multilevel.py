@@ -245,9 +245,11 @@ class MultilevelSolver(PyAMGSolver):
         MultilevelSolver.solve
         """
         def matvec(b):
-            b = jnp.ravel(jnp.asarray(b))
+            b_arr = jnp.asarray(b)
+            out_dtype = b_arr.dtype
+            b = jnp.ravel(b_arr).astype(jnp.result_type(b_arr, self.levels[0].A.dtype))
             x = jnp.zeros_like(b)
-            return self._cycle(x, b, cycle=cycle)
+            return self._cycle(x, b, cycle=cycle).astype(out_dtype)
 
         return matvec
 
