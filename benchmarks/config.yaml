@@ -1,17 +1,23 @@
 # AMJax benchmark: full configuration
 # One JSON per parameter combination (cartesian product of all values below).
 
-# pyamg, pyamg_pcg, cg: PyAMG/SciPy solvers, sequential batch
-# amjax, amjax_pcg: AMJax solvers, sequential batch
-# amjax_vmap, amjax_pcg_vmap: AMJax solvers, vmap batch
+# Choose one or more devices to benchmark on. If multiple, runs will be grouped by device.
+device: 
+  - cpu
+  # - gpu
+
+mode:
+  # - single
+  - vmap
+
+# pyamg, pyamg_pcg, cg: PyAMG/SciPy solvers (mode=single: one solve, mode=vmap: for-loop over K)
+# amjax, amjax_pcg: AMJax solvers (mode=single: one JIT solve, mode=vmap: jax.vmap over K)
 methods:
-  - pyamg
-  - pyamg_pcg
-  - cg
+  # - pyamg
+  # - pyamg_pcg
+  # - cg
   - amjax
   - amjax_pcg
-  - amjax_vmap
-  - amjax_pcg_vmap
 
 grid_sizes:
   - 50
@@ -25,9 +31,9 @@ grid_sizes:
 solvers:
   - smoothed_aggregation
   - rootnode
-  - pairwise
+  # - pairwise
   - ruge_stuben
-  - air
+  # - air
 
 # Solver used at the coarsest grid level.
 # Available in AMJax: jacobi
@@ -62,4 +68,5 @@ cycle_type:
 
 # Iterative smoother applied at each level of the hierarchy (pre and postsmoother).
 # Available in AMJax: jacobi
+smoothers:
   - jacobi

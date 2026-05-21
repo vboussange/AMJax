@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 from jax import lax
 from jax.experimental import sparse as jsparse
+from scipy.linalg import pinv
 from pyamg.multilevel import MultilevelSolver as PyAMGMultilevelSolver
 
 from .relaxation import relaxation as relaxation
@@ -41,10 +42,11 @@ class _Level:
     """
 
     def __init__(self):
-        self.A    = None
-        self.Dinv = None
-        self.P    = None
-        self.R    = None
+        self.A     = None
+        self.Dinv  = None
+        self.A_inv = None  # precomputed pseudo-inverse, used by pinv coarse solver
+        self.P     = None
+        self.R     = None
         self.presmoother       = None
         self.postsmoother      = None
         self._presmoother_spec  = None
@@ -54,9 +56,8 @@ class _Level:
 class MultilevelSolver(PyAMGMultilevelSolver):
     """JAX-compatible algebraic multigrid solver.
 
-    Extends ``pyamg.multilevel.MultilevelSolver`` with a JAX-traceable V-cycle
-    and a pytree registration that allows ``jax.jit`` and ``jax.grad`` to treat
-    the hierarchy as a first-class JAX value.
+    Extends ``pyamg.multilevel.MultilevelSolver`` with a fully JAX-compatible
+    solve step: JIT-compiled, GPU-accelerated, and registered as a pytree.
 
     Parameters
     ----------
@@ -67,7 +68,11 @@ class MultilevelSolver(PyAMGMultilevelSolver):
     coarse_solver_name : str
         Name of the coarse solver, stored for pytree serialisation.
     coarse_solver_kwargs : dict, optional
-        Keyword arguments forwarded to the coarse solver.
+        Keyword arguments forwarded to the coarse-grid solver.
+        - ``'pinv'``: ``rcond``
+        - ``'jacobi'``: ``iterations``, ``omega``.
+
+
 
     Attributes
     ----------
@@ -76,8 +81,7 @@ class MultilevelSolver(PyAMGMultilevelSolver):
     coarse_solver : callable
         Coarse-grid solver.
     symmetric_smoothing : bool
-        True when pre- and post-smoothers are identical and symmetric,
-        allowing conjugate-gradient compatibility.
+        True when pre- and post-smoothers are identical and symmetric.
 
     Methods
     -------
@@ -119,7 +123,7 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         pyamg_solver,
         presmoother=("jacobi", {"iterations": 1, "omega": 1.0}),
         postsmoother=("jacobi", {"iterations": 1, "omega": 1.0}),
-        coarse_solver="jacobi",
+        coarse_solver="pinv",
         coarse_solver_kwargs=None,
     ):
         """Construct a JAX multigrid hierarchy from a PyAMG hierarchy.
@@ -129,11 +133,21 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         pyamg_solver : pyamg.multilevel.MultilevelSolver
             Hierarchy built by a PyAMG solver factory (e.g. ``ruge_stuben_solver``).
         presmoother : str, tuple, list, or None
-            Pre-smoother specification.  See ``change_smoothers`` for accepted forms.
+            Pre-smoother specification.  
+            Passed directly to
+                ``change_smoothers``, which applies it to every level of the
+                hierarchy. Accepts:
+                - a string: ``'jacobi'``
+                - a tuple with kwargs: ``('jacobi', {'iterations': 2, 'omega': 0.8})``
+                - a list to set a different smoother per level
+                - ``None`` to disable smoothing
         postsmoother : str, tuple, list, or None
             Post-smoother specification.
+            Same accepted forms as ``presmoother``.
         coarse_solver : str
-            Name of the coarse-grid solver.  Currently only ``'jacobi'`` is supported.
+            Name of the coarse-grid solver. 
+            Available: ``'pinv'``, ``'jacobi'``.
+            Defaults to ``'pinv'``.
         coarse_solver_kwargs : dict, optional
             Keyword arguments forwarded to the coarse-grid solver.
             Defaults to ``{'iterations': 10, 'omega': 1.0}``.
@@ -144,9 +158,12 @@ class MultilevelSolver(PyAMGMultilevelSolver):
             Fully initialised JAX multigrid hierarchy.
         """
         if coarse_solver_kwargs is None:
-            coarse_solver_kwargs = {"iterations": 10, "omega": 1.0}
+            coarse_solver_kwargs = {}
 
-        levels    = _convert_hierarchy(pyamg_solver)
+        levels = _convert_hierarchy(pyamg_solver)
+        if coarse_solver == "pinv":
+            A_coarse = levels[-1].A
+            levels[-1].A_inv = jnp.linalg.pinv(A_coarse.todense(), **coarse_solver_kwargs)
         coarse_fn = coarse_grid_solver(
             coarse_solver, levels[-1], **coarse_solver_kwargs
         )
@@ -191,7 +208,7 @@ class MultilevelSolver(PyAMGMultilevelSolver):
 
         Parameters
         ----------
-        cycle : {'V', 'W'}
+        cycle : {'V'}
             Cycle type.
 
         Returns
@@ -232,17 +249,14 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         Parameters
         ----------
         cycle : str
-            Cycle type (currently only ``'V'`` is supported).
+            Cycle type. Available: ``'V'``.
 
         Returns
         -------
         callable
-            A ``matvec(b) -> x`` function compatible with
-            ``jax.scipy.sparse.linalg.cg`` and ``jax.scipy.sparse.linalg.gmres``.
-
-        See Also
-        --------
-        MultilevelSolver.solve
+            A ``matvec(b) -> x`` function compatible with any JAX Krylov
+            solver accepting an ``M`` preconditioner. Returns an approximation
+            of M⁻¹ b ≈ A⁻¹ b.
         """
         def matvec(b):
             b = jnp.ravel(jnp.asarray(b))
@@ -252,7 +266,7 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         return matvec
 
     def _cycle(self, x, b, cycle="V"):
-        """Apply one V-cycle of the multigrid algorithm.
+        """Apply one multigrid cycle.
 
         Python loops are unrolled at JAX compile time, making this
         compatible with ``lax.while_loop``.
@@ -264,7 +278,7 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         b : ndarray
             Right-hand side, length n.
         cycle : str
-            Cycle type (currently only ``'V'`` is supported).
+            Cycle type. Available: ``'V'``.
 
         Returns
         -------
@@ -315,33 +329,63 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         maxiter : int
             Maximum number of cycles.
         cycle : str
-            Cycle type (currently only ``'V'`` is supported).
+            Cycle type. Available: ``'V'``.
 
         Returns
         -------
         ndarray
             Approximate solution to Ax = b.
         """
+        if cycle != "V":
+            raise NotImplementedError(f"Cycle {cycle!r} not yet implemented.")
         b = jnp.ravel(jnp.asarray(b))
-        x = jnp.zeros_like(b) if x0 is None else jnp.ravel(jnp.asarray(x0))
-
-        A0    = self.levels[0].A
-        normb = jnp.linalg.norm(b)
-        normb = jnp.where(normb == 0.0, 1.0, normb)  # use absolute tolerance when b = 0
-        normr = jnp.linalg.norm(b - A0 @ x)
-
-        def cond(state):
-            _, it, normr_ = state
-            return (it < maxiter) & (normr_ >= tol * normb)
-
-        def body(state):
-            x_, it, _ = state
-            x_new  = self._cycle(x_, b, cycle=cycle)
-            normr_ = jnp.linalg.norm(b - A0 @ x_new)
-            return x_new, it + 1, normr_
-
-        x, _, _ = lax.while_loop(cond, body, (x, jnp.array(0), normr))
+        if x0 is not None:
+            x0 = jnp.ravel(jnp.asarray(x0))
+            b  = b - self.levels[0].A @ x0
+        x = _solve_vjp(self, b, jnp.asarray(tol), jnp.asarray(maxiter))
+        if x0 is not None:
+            x = x + x0
         return x
+
+
+def _solve(ml, b, tol, maxiter, cycle):
+    A0 = ml.levels[0].A
+    normb = jnp.linalg.norm(b)
+    normb = jnp.where(normb == 0.0, 1.0, normb)
+    x = jnp.zeros_like(b)
+    normr = jnp.linalg.norm(b - A0 @ x)
+
+    def cond(state):
+        _, it, normr_ = state
+        return (it < maxiter) & (normr_ >= tol * normb)
+
+    def body(state):
+        x_, it, _ = state
+        x_new = ml._cycle(x_, b, cycle=cycle)
+        normr_ = jnp.linalg.norm(b - A0 @ x_new)
+        return x_new, it + 1, normr_
+
+    x, _, _ = lax.while_loop(cond, body, (x, jnp.array(0), normr))
+    return x
+
+
+@jax.custom_vjp
+def _solve_vjp(ml, b, tol, maxiter):
+    return _solve(ml, b, tol, maxiter, 'V')
+
+
+def _solve_fwd(ml, b, tol, maxiter):
+    x = _solve(ml, b, tol, maxiter, 'V')
+    return x, (ml, tol, maxiter)
+
+
+def _solve_bwd(res, v):
+    ml, tol, maxiter = res
+    lam = _solve(ml, v, tol, maxiter, 'V')
+    return jax.tree_util.tree_map(jnp.zeros_like, ml), lam, jnp.zeros_like(tol), jnp.zeros_like(maxiter)
+
+
+_solve_vjp.defvjp(_solve_fwd, _solve_bwd)
 
 
 def coarse_grid_solver(solver_name, lvl, **kwargs):
@@ -350,11 +394,14 @@ def coarse_grid_solver(solver_name, lvl, **kwargs):
     Parameters
     ----------
     solver_name : str
-        Name of the coarse-grid solver.  Currently only ``'jacobi'`` is supported.
+        Name of the coarse-grid solver. Available: ``'pinv'``, ``'jacobi'``.
     lvl : _Level
         Coarsest level; must have ``A`` and ``Dinv`` attributes set.
     **kwargs
-        Additional keyword arguments forwarded to the solver.
+        Additional keyword arguments forwarded to the solver: 
+            - ``'jacobi'``: `iterations`, `omega`
+            -  ``'pinv'``: `rcond`
+
 
     Returns
     -------
@@ -363,17 +410,17 @@ def coarse_grid_solver(solver_name, lvl, **kwargs):
 
     Notes
     -----
-    The returned callable shares the same signature as the level smoothers so
-    that ``_cycle`` can treat them uniformly.
+    Same signature as level smoothers so ``_cycle`` can call them uniformly.
+
     """
-    _REGISTRY = {
-        "jacobi": _coarse_jacobi,
-    }
-    if solver_name not in _REGISTRY:
+    if solver_name == "jacobi":
+        return _coarse_jacobi(lvl.Dinv, **kwargs)
+    elif solver_name == "pinv":
+        return _coarse_pinv(lvl.A_inv)
+    else:
         raise ValueError(
-            f"Unknown coarse solver {solver_name!r}. Available: {sorted(_REGISTRY)}"
+            f"Unknown coarse solver {solver_name!r}. Available: ['jacobi', 'pinv']"
         )
-    return _REGISTRY[solver_name](lvl.Dinv, **kwargs)
 
 
 def _coarse_jacobi(Dinv, iterations=10, omega=1.0):
@@ -382,6 +429,14 @@ def _coarse_jacobi(Dinv, iterations=10, omega=1.0):
         return relaxation.jacobi(A, x, b, Dinv, iterations=iterations, omega=omega)
 
     solve.__name__ = "jacobi"
+    return solve
+
+def _coarse_pinv(A_inv):
+    """Return a coarse-grid solver that applies a precomputed pseudo-inverse."""
+    def solve(A, x, b):
+        return A_inv @ b
+
+    solve.__name__ = "pinv"
     return solve
 
 
@@ -446,14 +501,40 @@ def _convert_hierarchy(pyamg_solver):
 def _flatten(ml):
     # Non-coarse levels contribute 4 arrays each: [A, Dinv, P, R].
     # The coarsest level contributes 2 arrays: [A, Dinv].
+    """
+    Parameters
+    ----------
+    ml : MultilevelSolver
+
+    Returns
+    -------
+    leaves : list of JAX arrays
+        [A, Dinv, P, R] per non-coarse level, then [A, Dinv] for the coarsest level.
+    aux : dict
+        Non-array solver configuration metadata: 
+            - names
+            - kwargs 
+            - per-level smoother (name, kwargs) pairs
+
+    Notes
+    -----
+    JAX cannot trace through Python callables, so smoothers and the coarse solver
+    are stored as (name, kwargs) and rebuilt from scratch in _unflatten.
+    kwargs is converted to a sorted tuple because JAX uses aux as a JIT cache key,
+    which must be hashable.
+    """
     leaves = []
     for lvl in ml.levels[:-1]:
         leaves += [lvl.A, lvl.Dinv, lvl.P, lvl.R]
     coarse = ml.levels[-1]
+    has_A_inv = coarse.A_inv is not None
     leaves += [coarse.A, coarse.Dinv]
+    if has_A_inv:
+        leaves.append(coarse.A_inv)
 
     aux = {
         "n_levels":            len(ml.levels),
+        "has_A_inv":           has_A_inv,
         "smoother_specs":      tuple(
             (lvl._presmoother_spec, lvl._postsmoother_spec)
             for lvl in ml.levels[:-1]
@@ -466,6 +547,19 @@ def _flatten(ml):
 
 
 def _unflatten(aux, leaves):
+    """
+    Parameters
+    ----------
+    aux : dict
+        Non-array solver configuration metadata produced by _flatten.
+    leaves : list of JAX arrays
+        Array leaves produced by _flatten.
+
+    Returns
+    -------
+    MultilevelSolver
+        Fully reconstructed hierarchy with smoother and coarse-solver callables rebuilt.
+    """
     n      = aux["n_levels"]
     levels = []
 
@@ -478,10 +572,12 @@ def _unflatten(aux, leaves):
         lvl.R    = leaves[base + 3]
         levels.append(lvl)
 
-    coarse_base     = (n - 1) * 4
-    coarse_lvl      = _Level()
-    coarse_lvl.A    = leaves[coarse_base]
-    coarse_lvl.Dinv = leaves[coarse_base + 1]
+    coarse_base      = (n - 1) * 4
+    coarse_lvl       = _Level()
+    coarse_lvl.A     = leaves[coarse_base]
+    coarse_lvl.Dinv  = leaves[coarse_base + 1]
+    if aux["has_A_inv"]:
+        coarse_lvl.A_inv = leaves[coarse_base + 2]
     levels.append(coarse_lvl)
 
     coarse_kw = dict(aux["coarse_solver_kwargs"])
@@ -505,6 +601,7 @@ def _unflatten(aux, leaves):
     return ml
 
 
+# Register MultilevelSolver as a JAX pytree so it can be passed to jit, vmap, and grad.
 jax.tree_util.register_pytree_node(
     MultilevelSolver,
     _flatten,
@@ -520,7 +617,7 @@ class multilevel_solver(MultilevelSolver):  # noqa: N801
     """
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs) 
         warn(
             "multilevel_solver is deprecated. Use MultilevelSolver.",
             DeprecationWarning,

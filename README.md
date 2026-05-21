@@ -1,10 +1,16 @@
 # AMJax
 
-JAX implementation of algebraic multigrid (AMG) solvers for sparse linear systems.
+JAX implementation of algebraic multigrid (AMG) solvers for sparse linear systems. 
 
-Built on top of [PyAMG](https://github.com/pyamg/pyamg) for hierarchy construction.
-
-> **Design note:** AMJax is not a fully JAX-native AMG implementation. The hierarchy (coarsening, prolongation/restriction operators) is built by PyAMG in NumPy/SciPy and converted to JAX sparse arrays (`BCOO`). Only the solve step runs in JAX and benefits from JIT compilation and GPU acceleration.
+> **AMJax is a two-phase solver:**
+>
+> <u>Phase 1:</u> Hierarchy construction using PyAMG and NumPy
+>
+> PyAMG builds the AMG hierarchy: coarsening, prolongation and restriction operators. This is a one-time setup step, run on CPU.
+>
+> <u>Phase 2:</u> Solve using JAX
+>
+> The hierarchy is converted to JAX BCOO sparse arrays. All solve steps can be JIT-compiled, GPU-accelerated, and are compatible with `jax.vmap` for batched right-hand sides.
 
 ## Installation
 For now,
@@ -70,14 +76,14 @@ X = solve_batch(B)
 
 | Factory | Intended for |
 |---------|--------------|
-| `pyamg.smoothed_aggregation_solver` | SPD systems with known near-null space |
-| `pyamg.rootnode_solver` | Near-singular / non-diagonally-dominant |
-| `pyamg.pairwise_solver` | Low setup cost, greedy aggregation |
-| `pyamg.ruge_stuben_solver` | General sparse systems (classical AMG) |
+| `pyamg.smoothed_aggregation_solver` | SPD systems, standard aggregation AMG |
+| `pyamg.rootnode_solver` | SPD systems, robust for anisotropic problems |
+| `pyamg.pairwise_solver` | SPD systems, fast setup, weaker convergence |
+| `pyamg.ruge_stuben_solver` | General SPD systems, classical C/F splitting |
 | `pyamg.air_solver` | Non-symmetric systems |
 
-**Current limitations:** V-cycle only · `jacobi` coarse solver only.
+**Current limitations:** V-cycle only. `jacobi` coarse solver only.
 
 ## Benchmark
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/rss.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb)

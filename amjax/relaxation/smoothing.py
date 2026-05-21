@@ -1,18 +1,23 @@
 """Smoother setup and configuration for the JAX multigrid solver.
 
-All ``setup_*`` functions share the same interface:
+The setup_smoother_name functions are helper functions for
+parsing user input and assigning each level the appropriate smoother for
+the functions in 'change_smoothers'. They share the same interface:
 
 Parameters
 ----------
 lvl : _Level
     The multigrid level for which to build the smoother.
+iterations : int
+    Number of smoother iterations
 **kwargs
-    Method-specific keyword arguments (e.g. ``iterations``, ``omega``).
+    Method-specific keyword arguments such as ``omega``.
 
 Returns
 -------
 callable
-    A smoother with signature ``(A, x, b) -> x``.
+    Function pointer to the setup function for smoother ``fn``,
+    with signature ``(lvl, **kwargs) -> smoother``.
 
 See Also
 --------
@@ -52,23 +57,25 @@ def _expand_to_n(specs, n):
 
 
 def _bake_kwargs(kw, smoother):
-    """Replace ``withrho=True`` with the concrete omega resolved at construction time.
+    """Freeze the resolved omega into kwargs, replacing ``withrho=True``.
 
-    Ensures that ``rebuild_smoother`` never triggers spectral-radius
-    estimation during JAX tracing.
+    When ``withrho=True``, omega is divided by the spectral radius of D⁻¹A at
+    setup time. This function stores the resulting scalar so that
+    ``rebuild_smoother`` can reconstruct the smoother without recomputing the
+    spectral radius, which would fail under JAX tracing.
 
     Parameters
     ----------
     kw : dict
-        Raw keyword arguments as supplied by the user.
+        Raw kwargs as supplied by the user, possibly containing ``withrho=True``.
     smoother : callable
-        Smoother returned by ``setup_jacobi``, carrying a ``_omega`` attribute.
+        Already-built smoother carrying the resolved ``_omega`` attribute.
 
     Returns
     -------
     dict
-        Keyword arguments with ``withrho`` removed and ``omega`` set to the
-        concrete scalar computed at setup time.
+        kwargs with ``withrho`` removed and ``omega`` set to the concrete scalar.
+        Returned unchanged if ``withrho`` is False or absent.
     """
     if not kw.get("withrho", False):
         return dict(kw)
@@ -76,25 +83,7 @@ def _bake_kwargs(kw, smoother):
 
 
 def setup_jacobi(lvl, iterations=DEFAULT_NITER, omega=1.0, withrho=False):
-    """Build a damped Jacobi smoother for the given level.
-
-    Parameters
-    ----------
-    lvl : _Level
-        Multigrid level.  ``lvl.Dinv`` is computed here if not already set.
-    iterations : int
-        Number of Jacobi sweeps per call.
-    omega : scalar
-        Damping parameter.  When ``withrho=True`` this value is divided by
-        the estimated spectral radius of D^{-1} A.
-    withrho : bool
-        If True, scale ``omega`` by ``1 / rho(D^{-1} A)``.
-
-    Returns
-    -------
-    callable
-        Smoother ``(A, x, b) -> x`` implementing damped Jacobi.
-    """
+    """Set up block Jacobi."""
     if getattr(lvl, "Dinv", None) is None:
         lvl.Dinv = relaxation.inverse_diagonal(lvl.A)
     Dinv = lvl.Dinv
@@ -130,7 +119,11 @@ def setup_none(lvl, **kwargs):
 
 
 def _setup_call(fn):
-    """Return the setup function registered under smoother name ``fn``."""
+    """Register setup functions.
+
+    This is a helper function to call the setup methods and avoids use of eval().
+    """
+ 
     _REGISTRY = {
         "jacobi": setup_jacobi,
         "none":   setup_none,
@@ -151,27 +144,50 @@ def _setup_call(fn):
 
 
 def change_smoothers(ml, presmoother, postsmoother):
-    """Assign pre- and post-smoothers to every non-coarse level of ``ml``.
+    """Initialize pre- and post-smoothers throughout a MultilevelSolver.
 
-    Each level receives ``presmoother``, ``postsmoother``,
-    ``_presmoother_spec``, and ``_postsmoother_spec`` attributes.
-    Sets ``ml.symmetric_smoothing = True`` when pre- and post-smoothers are
-    identical and listed in ``SYMMETRIC_RELAXATION``.
+    For each level of ``ml`` (except the coarsest level), initialize the
+    ``.presmoother()`` and ``.postsmoother()`` methods used in the multigrid cycle,
+    with the option of having different smoothers at different levels.
 
     Parameters
     ----------
     ml : MultilevelSolver
-        Multigrid hierarchy to configure.
+        Data structure that stores the multigrid hierarchy.
     presmoother : str, tuple, list, or None
-        Smoother specification.  Accepted forms:
+        presmoother can be (1) the name of a supported smoother, e.g. ``'jacobi'``,
+        (2) a tuple of the form ``('method', kwargs_dict)`` where ``'method'`` is
+        the name of a supported smoother and ``kwargs_dict`` a dict of keyword
+        arguments, or (3) a list of instances of options 1 or 2.
 
-        * ``str``   — smoother name, e.g. ``'jacobi'``
-        * ``tuple`` — ``('method', kwargs_dict)``
-        * ``list``  — one specification per non-coarse level (last entry is
-          repeated if the list is shorter than the number of levels)
-        * ``None``  — identity smoother (no relaxation)
+        If presmoother is a list, ``presmoother[i]`` determines the smoothing
+        strategy for level i. Else, the same strategy is used for all levels.
+
+        If ``len(presmoother) < len(ml.levels)``, then ``presmoother[-1]``
+        is used for all remaining levels.
     postsmoother : str, tuple, list, or None
-        Same format as ``presmoother``.
+        Defines postsmoother in identical fashion to presmoother.
+
+    Returns
+    -------
+    None
+        ml is modified in place::
+
+            ml.levels[i].presmoother  <== presmoother[i]
+            ml.levels[i].postsmoother <== postsmoother[i]
+
+        ``ml.symmetric_smoothing`` is set to True or False depending on whether
+        the smoothing scheme is symmetric.
+
+    Notes
+    -----
+    - For jacobi method: when ``withrho=True``, ``omega`` is scaled by the spectral
+    radius of D⁻¹A on each level, so ``omega`` should lie in (0, 2).
+
+    Available smoothers
+    -------------------
+        jacobi
+        None
     """
     n = len(ml.levels[:-1])
     if n == 0:
@@ -200,21 +216,19 @@ def change_smoothers(ml, presmoother, postsmoother):
 
 
 def rebuild_smoother(lvl):
-    """Reconstruct pre- and post-smoother callables from stored specifications.
-
-    Called after a JAX pytree unflatten so that closures capture the
-    freshly reconstructed ``lvl.Dinv``.
+    """Rebuild the pre/post smoother on a level.
 
     Parameters
     ----------
-    lvl : _Level
-        A non-coarse level with ``_presmoother_spec`` and
-        ``_postsmoother_spec`` attributes set.
+    lvl : Level object
+        Single level of the hierarchy
 
-    Raises
-    ------
-    AttributeError
-        If ``_presmoother_spec`` or ``_postsmoother_spec`` is missing.
+    Notes
+    -----
+    This rebuilds a smoother on level lvl using the existing pre
+    and post smoothers.  If different methods are needed, see
+    `change_smoothers`.
+
     """
     if getattr(lvl, "_presmoother_spec", None) is None:
         raise AttributeError("Missing _presmoother_spec on level.")
