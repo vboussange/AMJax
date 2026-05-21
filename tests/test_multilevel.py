@@ -14,27 +14,32 @@ jax.config.update("jax_enable_x64", True)
 
 class TestMultilevel(TestCase):
     def test_coarse_grid_solver(self):
-        cases = []
-        cases.append(jsparse.BCOO.fromdense(jnp.array(np.diag(np.arange(1, 5, dtype=float)))))
-        cases.append(jsparse.BCOO.from_scipy_sparse(poisson((4,), format='csr')))
-        cases.append(jsparse.BCOO.from_scipy_sparse(poisson((4, 4), format='csr')))
+        cases = [
+            jsparse.BCOO.fromdense(jnp.array(np.diag(np.arange(1, 5, dtype=float)))),
+            jsparse.BCOO.from_scipy_sparse(poisson((4,),   format='csr')),
+            jsparse.BCOO.from_scipy_sparse(poisson((4, 4), format='csr')),
+        ]
 
-        # only 'jacobi' is supported as a coarse solver in AMJax
         for A in cases:
             lvl = MultilevelSolver.Level()
             lvl.A = A
-            lvl.Dinv = inverse_diagonal(A)
+            lvl.Dinv = inverse_diagonal(A) # for Jacobi solver
+            lvl.A_inv = jnp.linalg.pinv(A.todense()) # for pinv solver
 
-            # method should be approximately exact for small matrices
-            s = coarse_grid_solver('jacobi', lvl, iterations=500, omega=2/3)
             b = jnp.arange(A.shape[0], dtype=float)
 
-            x = s(A, jnp.zeros_like(b), b)
-            assert_almost_equal(np.array(A @ x), np.array(b), decimal=3)
+            for solver, kwargs in [('jacobi', {'iterations': 500, 'omega': 2/3}),
+                                    ('pinv', {})]:
+                coarse_solver = coarse_grid_solver(solver, lvl, **kwargs)
 
-            # subsequent calls use the same pre-computed Dinv
-            x = s(A, jnp.zeros_like(b), b)
-            assert_almost_equal(np.array(A @ x), np.array(b), decimal=3)
+                # method should be approximately exact for small matrices
+                x = coarse_solver(A, jnp.zeros_like(b), b)
+                assert_almost_equal(np.array(A @ x), np.array(b), decimal=3)
+
+                # subsequent calls use the same pre computed data, to verify thatresults are consistent
+                x = coarse_solver(A, jnp.zeros_like(b), b)
+                assert_almost_equal(np.array(A @ x), np.array(b), decimal=3)
+
 
     def test_aspreconditioner(self):
         import pyamg
@@ -141,6 +146,30 @@ class TestMultilevel(TestCase):
         self.assertRaises(NotImplementedError, mg.cycle_complexity, 'AMLI')
         self.assertRaises(NotImplementedError, mg.cycle_complexity, 'F')
 
+    def test_vjp(self):
+        import pyamg
+        np.random.seed(42)
+
+        A_scipy = poisson((10, 10), format='csr')
+        b = jnp.array(np.random.rand(A_scipy.shape[0]))
+
+        ml = MultilevelSolver.from_pyamg(
+            pyamg.ruge_stuben_solver(A_scipy),
+            presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+            postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+        )
+
+        f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
+
+        # compare VJP gradient against central finite differences in a random direction
+        rng = np.random.default_rng(0)
+        d = jnp.array(rng.standard_normal(b.shape))
+        eps = 1e-4
+        grad_vjp = jax.grad(f)(b)
+        directional_vjp = jnp.dot(grad_vjp, d)
+        directional_fd  = (f(b + eps * d) - f(b - eps * d)) / (2 * eps)
+        np.testing.assert_allclose(float(directional_vjp), float(directional_fd), rtol=1e-3)
+
     def test_from_pyamg_compatibility(self):
         import pyamg
         A = poisson((20, 20), format='csr')
@@ -165,12 +194,17 @@ class TestPrecisionMultilevel(TestCase):
             lvl = MultilevelSolver.Level()
             lvl.A = A
             lvl.Dinv = inverse_diagonal(A)
+            lvl.A_inv = jnp.linalg.pinv(A.todense())
 
-            b = diag_vals  # solution is x = [1, 1, 1, 1]
-            s = coarse_grid_solver('jacobi', lvl, iterations=1, omega=1.0)
-            x = s(A, jnp.zeros_like(b), b)
-            assert_almost_equal(np.array(A @ x), np.array(b), decimal=5)
+            b = diag_vals  # exacte solution is x = [1, 1, 1, 1] -> to compute numerical error 
 
-            # subsequent calls use the same pre-computed Dinv
-            x = s(A, jnp.zeros_like(b), b)
-            assert_almost_equal(np.array(A @ x), np.array(b), decimal=5)
+            for solver, kwargs in [('pinv',   {}),
+                                    ('jacobi', {'iterations': 1, 'omega': 1.0})]:
+                coarse_solver = coarse_grid_solver(solver, lvl, **kwargs)
+
+                x = coarse_solver(A, jnp.zeros_like(b), b)
+                assert_almost_equal(np.array(A @ x), np.array(b), decimal=5)
+
+                # subsequent calls use the same pre computed data
+                x = coarse_solver(A, jnp.zeros_like(b), b)
+                assert_almost_equal(np.array(A @ x), np.array(b), decimal=5)
