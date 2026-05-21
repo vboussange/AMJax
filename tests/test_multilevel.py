@@ -170,6 +170,59 @@ class TestMultilevel(TestCase):
         directional_fd  = (f(b + eps * d) - f(b - eps * d)) / (2 * eps)
         np.testing.assert_allclose(float(directional_vjp), float(directional_fd), rtol=1e-3)
 
+    def test_vjp_jit_and_vmap(self):
+        import pyamg
+        np.random.seed(42)
+
+        A_scipy = poisson((10, 10), format='csr')
+        b = jnp.array(np.random.rand(A_scipy.shape[0]))
+
+        ml = MultilevelSolver.from_pyamg(
+            pyamg.ruge_stuben_solver(A_scipy),
+            presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+            postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+        )
+
+        f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
+
+        # jit compiled gradient
+        grad_jit = jax.jit(jax.grad(f))(b)
+        assert grad_jit.shape == b.shape
+
+        # vmapped gradient over a batch
+        B = jnp.array(np.random.rand(4, b.shape[0]))
+        grad_vmap = jax.vmap(jax.grad(f))(B)
+        assert grad_vmap.shape == B.shape
+
+    def test_vjp_optimization(self):
+        import pyamg
+        np.random.seed(42)
+
+        A_scipy = poisson((10, 10), format='csr')
+        ml = MultilevelSolver.from_pyamg(
+            pyamg.ruge_stuben_solver(A_scipy),
+            presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+            postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+        )
+
+        n = A_scipy.shape[0]
+        x_target = jnp.ones(n)
+        theta = jnp.zeros(n)
+
+        def loss(theta):
+            x = ml.solve(theta, tol=1e-10, maxiter=100)
+            return jnp.sum((x - x_target) ** 2)
+
+        # gradient descent
+        lr = 1e-4
+        losses = [float(loss(theta))]
+        for _ in range(20):
+            theta = theta - lr * jax.grad(loss)(theta)
+            losses.append(float(loss(theta)))
+
+        assert losses[-1] < losses[0]
+
+
     def test_from_pyamg_compatibility(self):
         import pyamg
         A = poisson((20, 20), format='csr')
