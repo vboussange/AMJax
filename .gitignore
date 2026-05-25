@@ -212,4 +212,5 @@ __marimo__/
 # AMJax — local benchmark config (personal, not for version control)
 benchmarks/config_local.yaml
 
-results/
+benchmarks/results/
+benchmarks/results_pinv/

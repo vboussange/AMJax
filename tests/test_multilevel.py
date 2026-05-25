@@ -16,20 +16,20 @@ class TestMultilevel(TestCase):
     def test_coarse_grid_solver(self):
         cases = [
             jsparse.BCOO.fromdense(jnp.array(np.diag(np.arange(1, 5, dtype=float)))),
-            jsparse.BCOO.from_scipy_sparse(poisson((4,),   format='csr')),
+            jsparse.BCOO.from_scipy_sparse(poisson((4,), format='csr')),
             jsparse.BCOO.from_scipy_sparse(poisson((4, 4), format='csr')),
         ]
 
         for A in cases:
             lvl = MultilevelSolver.Level()
             lvl.A = A
-            lvl.Dinv = inverse_diagonal(A) # for Jacobi solver
-            lvl.A_inv = jnp.linalg.pinv(A.todense()) # for pinv solver
-
+            lvl.Dinv = inverse_diagonal(A)
+            lvl.A_dense = A.todense()
+            lvl.A_inv = jnp.linalg.pinv(lvl.A_dense)
             b = jnp.arange(A.shape[0], dtype=float)
 
             for solver, kwargs in [('jacobi', {'iterations': 500, 'omega': 2/3}),
-                                    ('pinv', {})]:
+                                    ('pinv', {}), ('lu', {}), ('qr', {})]:
                 coarse_solver = coarse_grid_solver(solver, lvl, **kwargs)
 
                 # method should be approximately exact for small matrices
@@ -57,12 +57,10 @@ class TestMultilevel(TestCase):
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
         )
 
-        # AMJax only supports the V cycle;
         # aspreconditioner() returns a JAX callable —> use jax.scipy CG to stay fully in JAX
-        for cycle in ['V']:
+        for cycle in ['V', 'W', 'F']:
             M = ml.aspreconditioner(cycle=cycle)
             x, _info = jax.scipy.sparse.linalg.cg(A, b, M=M, tol=1e-8, maxiter=30)
-            # cg satisfies convergence in the Euclidean norm
             assert jnp.linalg.norm(b - A @ x) < 1e-8 * jnp.linalg.norm(b)
 
     def test_solve(self):
@@ -80,10 +78,11 @@ class TestMultilevel(TestCase):
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
         )
 
-        # AMJax solve is JIT-compatible
-        solve = jax.jit(lambda b: ml.solve(b, maxiter=100, tol=1e-8))
-        x = solve(b)
-        assert jnp.linalg.norm(b - jsparse.BCOO.from_scipy_sparse(A_scipy) @ x) < 1e-8 * jnp.linalg.norm(b)
+        A_jax = jsparse.BCOO.from_scipy_sparse(A_scipy)
+        for cycle in ['V', 'W', 'F']:
+            solve = jax.jit(lambda b, c=cycle: ml.solve(b, maxiter=100, tol=1e-8, cycle=c))
+            x = solve(b)
+            assert jnp.linalg.norm(b - A_jax @ x) < 1e-8 * jnp.linalg.norm(b)
 
     def test_vmap_compatibility(self):
         import pyamg
@@ -126,25 +125,28 @@ class TestMultilevel(TestCase):
         mg = MultilevelSolver(levels[:1], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 100.0/100.0)  # 1
         assert_equal(mg.cycle_complexity(cycle='W'), 100.0/100.0)  # 1
+        assert_equal(mg.cycle_complexity(cycle='F'), 100.0/100.0)  # 1
 
         # two level hierarchy
         mg = MultilevelSolver(levels[:2], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 225.0/100.0)  # 2,1
         assert_equal(mg.cycle_complexity(cycle='W'), 225.0/100.0)  # 2,1
+        assert_equal(mg.cycle_complexity(cycle='F'), 225.0/100.0)  # 2,1
 
         # three level hierarchy
         mg = MultilevelSolver(levels[:3], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 259.0/100.0)  # 2,2,1
         assert_equal(mg.cycle_complexity(cycle='W'), 318.0/100.0)  # 2,4,2
+        assert_equal(mg.cycle_complexity(cycle='F'), 318.0/100.0)  # 2,4,2
 
         # four level hierarchy
         mg = MultilevelSolver(levels[:4], dummy_solver)
         assert_equal(mg.cycle_complexity(cycle='V'), 272.0/100.0)  # 2,2,2,1
         assert_equal(mg.cycle_complexity(cycle='W'), 388.0/100.0)  # 2,4,8,4
+        assert_equal(mg.cycle_complexity(cycle='F'), 366.0/100.0)  # 2,4,6,3
 
-        # AMLI and F cycles are not implemented in AMJax
+        # AMLI not implemented
         self.assertRaises(NotImplementedError, mg.cycle_complexity, 'AMLI')
-        self.assertRaises(NotImplementedError, mg.cycle_complexity, 'F')
 
     def test_vjp(self):
         import pyamg
@@ -276,12 +278,13 @@ class TestPrecisionMultilevel(TestCase):
             lvl = MultilevelSolver.Level()
             lvl.A = A
             lvl.Dinv = inverse_diagonal(A)
-            lvl.A_inv = jnp.linalg.pinv(A.todense())
+            lvl.A_dense = A.todense()
+            lvl.A_inv = jnp.linalg.pinv(lvl.A_dense)
 
-            b = diag_vals  # exacte solution is x = [1, 1, 1, 1] -> to compute numerical error 
+            b = diag_vals  # exact solution is x = [1, 1, 1, 1]
 
-            for solver, kwargs in [('pinv',   {}),
-                                    ('jacobi', {'iterations': 1, 'omega': 1.0})]:
+            for solver, kwargs in [('pinv', {}), ('lu', {}),
+                                    ('qr', {}), ('jacobi', {'iterations': 1, 'omega': 1.0})]:
                 coarse_solver = coarse_grid_solver(solver, lvl, **kwargs)
 
                 x = coarse_solver(A, jnp.zeros_like(b), b)
