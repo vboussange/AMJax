@@ -50,8 +50,8 @@ def inverse_diagonal(A):
 
     Notes
     -----
-    JAX evaluates both branches of ``jnp.where`` simultaneously, so a
-    naive ``1.0 / d`` would produce a NaN even when guarded by the
+    JAX evaluates both branches of jnp.where simultaneously, so a
+    naive 1.0 / d would produce a NaN even when guarded by the
     condition.  The safe divisor substitutes 1.0 for zero entries before
     division, then masks the result back to zero.
     """
@@ -63,7 +63,7 @@ def inverse_diagonal(A):
 def jacobi(A, x, b, Dinv, iterations=1, omega=1.0):
     """Perform damped Jacobi relaxation on the linear system Ax = b.
 
-    Applies ``iterations`` sweeps of::
+    Applies iterations sweeps of::
 
         x <- (1 - omega) * x + omega * (x + D^{-1}(b - A x))
 
@@ -85,7 +85,7 @@ def jacobi(A, x, b, Dinv, iterations=1, omega=1.0):
     Returns
     -------
     ndarray
-        Updated iterate after ``iterations`` sweeps.
+        Updated iterate after iterations sweeps.
     """
 
     def body(_, xk):

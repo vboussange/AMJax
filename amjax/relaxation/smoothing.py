@@ -11,13 +11,13 @@ lvl : _Level
 iterations : int
     Number of smoother iterations
 **kwargs
-    Method-specific keyword arguments such as ``omega``.
+    Method-specific keyword arguments such as omega.
 
 Returns
 -------
 callable
-    Function pointer to the setup function for smoother ``fn``,
-    with signature ``(lvl, **kwargs) -> smoother``.
+    Function pointer to the setup function for smoother fn,
+    with signature (lvl, **kwargs) -> smoother.
 
 See Also
 --------
@@ -34,7 +34,7 @@ SYMMETRIC_RELAXATION = ["jacobi", None]
 
 
 def _unpack_arg(v):
-    """Return a ``(name, kwargs)`` pair from a smoother specification."""
+    """Return a (name, kwargs) pair from a smoother specification."""
     if isinstance(v, tuple):
         return v[0], v[1]
     return v, {}
@@ -50,32 +50,32 @@ def _as_list(v):
 
 
 def _expand_to_n(specs, n):
-    """Repeat the last specification until the list has ``n`` entries."""
+    """Repeat the last specification until the list has n entries."""
     if not specs:
         raise ValueError("Empty smoother specification.")
     return (specs + [specs[-1]] * n)[:n]
 
 
 def _bake_kwargs(kw, smoother):
-    """Freeze the resolved omega into kwargs, replacing ``withrho=True``.
+    """Freeze the resolved omega into kwargs, replacing withrho=True.
 
-    When ``withrho=True``, omega is divided by the spectral radius of D⁻¹A at
+    When withrho=True, omega is divided by the spectral radius of D⁻¹A at
     setup time. This function stores the resulting scalar so that
-    ``rebuild_smoother`` can reconstruct the smoother without recomputing the
+    rebuild_smoother can reconstruct the smoother without recomputing the
     spectral radius, which would fail under JAX tracing.
 
     Parameters
     ----------
     kw : dict
-        Raw kwargs as supplied by the user, possibly containing ``withrho=True``.
+        Raw kwargs as supplied by the user, possibly containing withrho=True.
     smoother : callable
-        Already-built smoother carrying the resolved ``_omega`` attribute.
+        Already-built smoother carrying the resolved _omega attribute.
 
     Returns
     -------
     dict
-        kwargs with ``withrho`` removed and ``omega`` set to the concrete scalar.
-        Returned unchanged if ``withrho`` is False or absent.
+        kwargs with withrho removed and omega set to the concrete scalar.
+        Returned unchanged if withrho is False or absent.
     """
     if not kw.get("withrho", False):
         return dict(kw)
@@ -106,7 +106,7 @@ def setup_none(lvl, **kwargs):
     Returns
     -------
     callable
-        Smoother ``(A, x, b) -> x`` that returns x unmodified.
+        Smoother (A, x, b) -> x that returns x unmodified.
     """
     del lvl, kwargs
 
@@ -146,8 +146,8 @@ def _setup_call(fn):
 def change_smoothers(ml, presmoother, postsmoother):
     """Initialize pre- and post-smoothers throughout a MultilevelSolver.
 
-    For each level of ``ml`` (except the coarsest level), initialize the
-    ``.presmoother()`` and ``.postsmoother()`` methods used in the multigrid cycle,
+    For each level of ml (except the coarsest level), initialize the
+    .presmoother() and .postsmoother() methods used in the multigrid cycle,
     with the option of having different smoothers at different levels.
 
     Parameters
@@ -155,15 +155,13 @@ def change_smoothers(ml, presmoother, postsmoother):
     ml : MultilevelSolver
         Data structure that stores the multigrid hierarchy.
     presmoother : str, tuple, list, or None
-        presmoother can be (1) the name of a supported smoother, e.g. ``'jacobi'``,
-        (2) a tuple of the form ``('method', kwargs_dict)`` where ``'method'`` is
-        the name of a supported smoother and ``kwargs_dict`` a dict of keyword
+        presmoother can be (1) the name of a supported smoother, e.g. 'jacobi',
+        (2) a tuple of the form ('method', kwargs_dict) where 'method' is
+        the name of a supported smoother and kwargs_dict a dict of keyword
         arguments, or (3) a list of instances of options 1 or 2.
-
-        If presmoother is a list, ``presmoother[i]`` determines the smoothing
+        If presmoother is a list, presmoother[i] determines the smoothing
         strategy for level i. Else, the same strategy is used for all levels.
-
-        If ``len(presmoother) < len(ml.levels)``, then ``presmoother[-1]``
+        If len(presmoother) < len(ml.levels), then presmoother[-1]
         is used for all remaining levels.
     postsmoother : str, tuple, list, or None
         Defines postsmoother in identical fashion to presmoother.
@@ -176,13 +174,13 @@ def change_smoothers(ml, presmoother, postsmoother):
             ml.levels[i].presmoother  <== presmoother[i]
             ml.levels[i].postsmoother <== postsmoother[i]
 
-        ``ml.symmetric_smoothing`` is set to True or False depending on whether
+        ml.symmetric_smoothing is set to True or False depending on whether
         the smoothing scheme is symmetric.
 
     Notes
     -----
-    - For jacobi method: when ``withrho=True``, ``omega`` is scaled by the spectral
-    radius of D⁻¹A on each level, so ``omega`` should lie in (0, 2).
+    - For jacobi method: when withrho=True, omega is scaled by the spectral
+    radius of D⁻¹A on each level, so omega should lie in (0, 2).
 
     Available smoothers
     -------------------

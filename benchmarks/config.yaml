@@ -7,8 +7,8 @@ device:
   # - gpu
 
 mode:
-  # - single
-  - vmap
+  - single
+  # - vmap
 
 # pyamg, pyamg_pcg, cg: PyAMG/SciPy solvers (mode=single: one solve, mode=vmap: for-loop over K)
 # amjax, amjax_pcg: AMJax solvers (mode=single: one JIT solve, mode=vmap: jax.vmap over K)
@@ -20,17 +20,17 @@ methods:
   - amjax_pcg
 
 grid_sizes:
-  - 50
-  - 100
-  - 200
-  - 500
+  # - 50
+  # - 100
+  # - 200
+  # - 500
   - 1000
 
 # PyAMG hierarchy factory. 
 # Available in PyAMG: smoothed_aggregation, rootnode, pairwise, ruge_stuben, air
 solvers:
-  - smoothed_aggregation
-  - rootnode
+  # - smoothed_aggregation
+  # - rootnode
   # - pairwise
   - ruge_stuben
   # - air
@@ -38,7 +38,8 @@ solvers:
 # Solver used at the coarsest grid level.
 # Available in AMJax: jacobi
 coarse_solvers:
-  - jacobi
+  # - jacobi
+  - pinv
 
 # Convergence tolerance on ||b - Ax|| / ||b||
 tol:
@@ -59,7 +60,7 @@ vmap_k:
 # Floating-point precision (f64 or f32)
 dtypes:
   - f64
-  - f32
+  # - f32
 
 # Multigrid cycle type.
 # Available in AMJax: V. 
