@@ -244,7 +244,7 @@ class TestPrecisionMultilevel(TestCase):
         import pyamg
 
         A_scipy = poisson((8, 8), format='csr').astype(np.float32)
-        ml = AMJAXSolver.from_pyamg(
+        ml = MultilevelSolver.from_pyamg(
             pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
         )
 
@@ -260,7 +260,7 @@ class TestPrecisionMultilevel(TestCase):
         import pyamg
 
         A_scipy = poisson((8, 8), format='csr').astype(np.float32)
-        ml = AMJAXSolver.from_pyamg(
+        ml = MultilevelSolver.from_pyamg(
             pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
         )
         M = ml.aspreconditioner()
