@@ -133,3 +133,5 @@ For JAX methods, reported times are solve times only (JIT compilation excluded).
 
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb)
+
+For a more detailed benchmark, see [amjax-docs-yb9b.vercel.app](https://amjax-docs-yb9b.vercel.app/).
