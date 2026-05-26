@@ -121,8 +121,8 @@ For JAX methods, reported times are solve times only (JIT compilation excluded).
 
 | Device | PyAMG | PyAMG + CG | AMJax | AMJax + CG |
 |--------|------:|-----------:|------:|-----------:|
-| CPU    | 1.897 | 1.508      | —     | —          |
-| GPU    | —     | —          | 0.119 | 0.091      |
+| CPU    | 1.897 | 1.508      | 0.0003    | 0.0003          |
+| GPU    | —     | —          | 0.118 | 0.091      |
 
 - **Batched solve** (K=64, `jax.vmap`, seconds)
 
@@ -133,3 +133,5 @@ For JAX methods, reported times are solve times only (JIT compilation excluded).
 
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb)
+
+For a more detailed benchmark, see [amjax-docs-yb9b.vercel.app](https://amjax-docs-yb9b.vercel.app/).

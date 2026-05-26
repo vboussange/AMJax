@@ -2,44 +2,46 @@
 # One JSON per parameter combination (cartesian product of all values below).
 
 # Choose one or more devices to benchmark on. If multiple, runs will be grouped by device.
-device: 
+device:
   - cpu
-  # - gpu
+  - gpu
 
 mode:
   - single
-  # - vmap
+  - vmap
 
 # pyamg, pyamg_pcg, cg: PyAMG/SciPy solvers (mode=single: one solve, mode=vmap: for-loop over K)
 # amjax, amjax_pcg: AMJax solvers (mode=single: one JIT solve, mode=vmap: jax.vmap over K)
 methods:
-  # - pyamg
-  # - pyamg_pcg
-  # - cg
+  - pyamg
+  - pyamg_pcg
+  - cg
   - amjax
   - amjax_pcg
 
 grid_sizes:
-  # - 50
-  # - 100
-  # - 200
-  # - 500
+  - 50
+  - 100
+  - 200
+  - 500
   - 1000
 
-# PyAMG hierarchy factory. 
+# PyAMG hierarchy factory.
 # Available in PyAMG: smoothed_aggregation, rootnode, pairwise, ruge_stuben, air
 solvers:
-  # - smoothed_aggregation
-  # - rootnode
-  # - pairwise
+  - smoothed_aggregation
+  - rootnode
+  - pairwise
   - ruge_stuben
-  # - air
+  - air
 
 # Solver used at the coarsest grid level.
-# Available in AMJax: jacobi
+# Available in AMJax: jacobi, lu, qr, pinv
 coarse_solvers:
-  # - jacobi
+  - jacobi
   - pinv
+  - lu
+  - qr
 
 # Convergence tolerance on ||b - Ax|| / ||b||
 tol:
@@ -57,15 +59,17 @@ maxiter_solv:
 vmap_k:
   - 64
 
-# Floating-point precision (f64 or f32)
+# Floating-point precision 
 dtypes:
   - f64
-  # - f32
+  - f32
 
 # Multigrid cycle type.
-# Available in AMJax: V. 
+# Available in AMJax: V, W, F
 cycle_type:
   - V
+  - W
+  - F
 
 # Iterative smoother applied at each level of the hierarchy (pre and postsmoother).
 # Available in AMJax: jacobi
