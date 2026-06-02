@@ -1,6 +1,6 @@
 # AMJax
 
-AMJax bridges PyAMG and JAX for algebraic multigrid (AMG) solvers: it converts PyAMG-constructed hierarchies into `jax.{jit,grad,vmap}`-compatible, multi-level solvers and preconditioners for large sparse linear systems.
+`AMJax` brings algebraic multigrid (AMG) methods to JAX for solving large-scale linear systems with optimal or near-optimal efficiency. It bridges [`PyAMG`](https://github.com/pyamg/pyamg) with JAX by converting `PyAMG`-constructed hierarchies into `jax.{jit,grad,vmap}`-compatible, multi-level solvers and preconditioners for large sparse linear systems.
 
 ## Installation
 ```bash
