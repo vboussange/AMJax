@@ -1,25 +1,14 @@
 # AMJax
 
-JAX implementation of algebraic multigrid (AMG) solvers for sparse linear systems. 
-
-> **AMJax is a two-phase solver:**
->
-> <u>Phase 1:</u> Hierarchy construction using PyAMG and NumPy
->
-> PyAMG builds the AMG hierarchy: coarsening, prolongation and restriction operators. This is a one-time setup step, run on CPU.
->
-> <u>Phase 2:</u> Solve using JAX
->
-> The hierarchy is converted to JAX BCOO sparse arrays. All solve steps can be JIT-compiled, GPU-accelerated, and are compatible with `jax.vmap` for batched right-hand sides.
+AMJax bridges PyAMG and JAX for algebraic multigrid (AMG) solvers: it converts PyAMG-constructed hierarchies into `jax.{jit,grad,vmap}`-compatible, multi-level solvers and preconditioners for large sparse linear systems.
 
 ## Installation
-For now,
+
+Install directly from GitHub (PyPI release coming soon):
 
 ```bash
 uv add git+https://github.com/vboussange/AMJax.git
 ```
-
-but we will soon add the package to PyPi 🙃.
 
 ## Usage
 
@@ -63,7 +52,7 @@ solve_batch = jax.jit(jax.vmap(lambda b: ml.solve(b, tol=1e-8, maxiter=100)))
 X = solve_batch(B)
 ```
 
-### Differentiation solve with `jax.grad`
+### Differentiating through the solve with `jax.grad`
 
 ```python
 f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
@@ -82,9 +71,9 @@ grad = jax.grad(f)(b)
 - V, W and F cycles compiled with `jax.jit`
 - Coarse solvers: `jacobi`, `lu`, `qr`, `pinv`
 - Smoothers: `jacobi`
-- AMG preconditioning for JAX Krylov solvers
-- Compatible with `jax.vmap` for batched right-hand sides
-- Compatible with `jax.grad`
+- AMG preconditioning for JAX Krylov solvers (e.g. `jax.scipy.sparse.linalg.cg`)
+- `jax.vmap` support for batched right-hand sides
+- `jax.grad` support through both direct solve and preconditioned Krylov solvers
 
 ## Solvers
 
@@ -102,36 +91,19 @@ grad = jax.grad(f)(b)
 
 ## Benchmark
 
-For JAX methods, reported times are solve times only (JIT compilation excluded).
+An exhaustive benchmark can be run in Colab: 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb) 
+<!-- And results are reported at XXX -->
 
-| | |
-|---|---|
-| Hierarchy | Ruge-Stüben |
-| Coarse solver | `pinv` |
-| Cycle | V |
-| Smoother | Jacobi |
-| n | 1,000 |
-| dtype | f64 |
-| tol | 1e-10 |
-| maxiter | 100 |
-| Residual | ‖b − Ax‖ / ‖b‖ |
+Some key insights on **speedup gains vs PyAMG-based counterpart**:
 
 
-- **Single solve** (1 RHS, seconds)
-
-| Device | PyAMG | PyAMG + CG | AMJax | AMJax + CG |
-|--------|------:|-----------:|------:|-----------:|
-| CPU    | 1.897 | 1.508      | 0.0003    | 0.0003          |
-| GPU    | —     | —          | 0.118 | 0.091      |
-
-- **Batched solve** (K=64, `jax.vmap`, seconds)
-
-| Device | PyAMG | PyAMG + CG | AMJax | AMJax + CG |
-|--------|------:|-----------:|------:|-----------:|
-| CPU    | 139.4 | 110.7      | 192.4 |          |
-| GPU    | —     | —          | 6.553 | 4.820      |
+| Scenario | Method | CPU | GPU |
+|----------|--------|----:|----:|
+| Single solve ($Ax=b$, $b \in \mathbb{R}^n$) | AMJax | - | ~16× |
+| Single solve ($Ax=b$, $b \in \mathbb{R}^n$) | AMJax + CG | - | ~17× |
+| Batched solve ($AX=B$, $B \in \mathbb{R}^{n \times K}$, $K=64$, `jax.vmap`) | AMJax | 0.7× | ~21× |
+| Batched solve ($AX=B$, $B \in \mathbb{R}^{n \times K}$, $K=64$, `jax.vmap`) | AMJax + CG | - | ~23× |
 
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb)
-
-For a more detailed benchmark, see [amjax-docs-yb9b.vercel.app](https://amjax-docs-yb9b.vercel.app/).
+> Settings: Ruge-Stüben hierarchy, V-cycle, Jacobi smoother, `pinv` coarse solver, $n = 1{,}000$, f64, rtol $= 10^{-10}$, max 100 iterations. JAX times exclude JIT compilation. GPU speedup is relative to the PyAMG CPU counterpart.

@@ -5,10 +5,12 @@ requires = ["hatchling"]
 [project]
 name = "amjax"
 authors = [
-    {email = "vic.boussange@gmail.com", name = "Victor Boussange"}
+    {email = "vic.boussange@gmail.com", name = "Victor Boussange"},
+    {email = "fanny.missillier@epfl.ch", name = "Fanny Missillier"}
 ]
 maintainers = [
     {email = "vic.boussange@gmail.com", name = "Victor Boussange"}
+    {email = "fanny.missillier@epfl.ch", name = "Fanny Missillier"}
 ]
 
 version = "0.0.1"
