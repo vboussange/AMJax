@@ -9,7 +9,7 @@ authors = [
     {email = "fanny.missillier@epfl.ch", name = "Fanny Missillier"}
 ]
 maintainers = [
-    {email = "vic.boussange@gmail.com", name = "Victor Boussange"}
+    {email = "vic.boussange@gmail.com", name = "Victor Boussange"},
     {email = "fanny.missillier@epfl.ch", name = "Fanny Missillier"}
 ]
 
@@ -19,7 +19,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "jax>=0.6.1",
-    "numpy>2.4.0",
+    "numpy>2.0.0",
     "pyamg>=4.0.0",
     "scipy>=1.11.0",
     "matplotlib>=3.0.0",
