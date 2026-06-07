@@ -31,9 +31,9 @@ grid_sizes:
 solvers:
   - smoothed_aggregation
   - rootnode
-  - pairwise
+  # - pairwise
   - ruge_stuben
-  - air
+  # - air
 
 # Solver used at the coarsest grid level.
 # Available in AMJax: jacobi, lu, qr, pinv
@@ -47,8 +47,8 @@ coarse_solvers:
 tol:
   - 1.0e-10
 
-# Max V-cycle iterations
-maxiter_vcycle:
+# Max cycle iterations (V, W, F)
+maxiter_cycle:
   - 100
 
 # Max iterations for CG-based methods

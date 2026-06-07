@@ -84,13 +84,12 @@ def _bake_kwargs(kw, smoother):
 
 def setup_jacobi(lvl, iterations=DEFAULT_NITER, omega=1.0, withrho=False):
     """Set up block Jacobi."""
-    if getattr(lvl, "Dinv", None) is None:
-        lvl.Dinv = relaxation.inverse_diagonal(lvl.A)
     Dinv = lvl.Dinv
 
     if withrho:
-        rho = relaxation.approximate_spectral_radius(lvl.A, Dinv)
-        omega = omega / rho
+        if not hasattr(lvl, '_spectral_radius'):
+            lvl._spectral_radius = relaxation.approximate_spectral_radius(lvl.A, Dinv)
+        omega = omega / lvl._spectral_radius
 
     def smoother(A, x, b):
         return relaxation.jacobi(A, x, b, Dinv, iterations=iterations, omega=omega)
@@ -118,12 +117,22 @@ def setup_none(lvl, **kwargs):
     return smoother
 
 
+_NOT_IMPLEMENTED_SMOOTHERS = {
+    "gauss_seidel", "sor", "block_jacobi", "block_gauss_seidel",
+    "schwarz", "strength_based_schwarz", "richardson", "chebyshev",
+    "jacobi_ne", "gauss_seidel_ne", "gauss_seidel_nr",
+    "gauss_seidel_indexed", "cf_jacobi", "fc_jacobi",
+    "cf_block_jacobi", "fc_block_jacobi", "gmres", "cg", "cgne", "cgnr",
+    "bsr_gauss_seidel", "bsr_jacobi", "bsr_jacobi_indexed",
+}
+
+
 def _setup_call(fn):
     """Register setup functions.
 
     This is a helper function to call the setup methods and avoids use of eval().
     """
- 
+
     _REGISTRY = {
         "jacobi": setup_jacobi,
         "none":   setup_none,
@@ -134,6 +143,12 @@ def _setup_call(fn):
 
     if not isinstance(fn, str):
         raise ValueError(f"Smoother name must be a string or None, got {fn!r}")
+
+    if fn in _NOT_IMPLEMENTED_SMOOTHERS:
+        raise NotImplementedError(
+            f"'{fn}' smoother is not yet implemented in AMJax. "
+            f"Available: {sorted(_REGISTRY)}"
+        )
 
     if fn not in _REGISTRY:
         raise ValueError(
@@ -235,5 +250,5 @@ def rebuild_smoother(lvl):
 
     fn1, kw1 = lvl._presmoother_spec
     fn2, kw2 = lvl._postsmoother_spec
-    lvl.presmoother  = _setup_call(fn1)(lvl, **kw1)
+    lvl.presmoother = _setup_call(fn1)(lvl, **kw1)
     lvl.postsmoother = _setup_call(fn2)(lvl, **kw2)

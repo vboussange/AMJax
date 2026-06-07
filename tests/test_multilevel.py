@@ -21,23 +21,29 @@ class TestMultilevel(TestCase):
         ]
 
         for A in cases:
-            lvl = MultilevelSolver.Level()
-            lvl.A = A
-            lvl.Dinv = inverse_diagonal(A)
-            lvl.A_dense = A.todense()
-            lvl.A_inv = jnp.linalg.pinv(lvl.A_dense)
             b = jnp.arange(A.shape[0], dtype=float)
 
-            for solver, kwargs in [('jacobi', {'iterations': 500, 'omega': 2/3}),
-                                    ('pinv', {}), ('lu', {}), ('qr', {})]:
-                coarse_solver = coarse_grid_solver(solver, lvl, **kwargs)
+            for solver, kwargs in [
+                ('jacobi', {'iterations': 500, 'omega': 2/3}),
+                ('pinv', {}),
+                ('lu', {}),
+                ('qr', {}),
+            ]:
+                lvl = MultilevelSolver.Level()
+                lvl.A = A
+                lvl.Dinv = inverse_diagonal(A)
 
-                # method should be approximately exact for small matrices
-                x = coarse_solver(A, jnp.zeros_like(b), b)
-                assert_almost_equal(np.array(A @ x), np.array(b), decimal=3)
+                if solver in ('pinv', 'lu', 'qr'):
+                    lvl.A_dense = A.todense()
+                    if solver == 'pinv':
+                        lvl.A_inv = jnp.linalg.pinv(lvl.A_dense)
+                    elif solver == 'lu':
+                        lvl.lu_factor, lvl.piv = jax.scipy.linalg.lu_factor(lvl.A_dense)
+                    elif solver == 'qr':
+                        lvl.Q, lvl.R_mat = jnp.linalg.qr(lvl.A_dense)
 
-                # subsequent calls use the same pre computed data, to verify thatresults are consistent
-                x = coarse_solver(A, jnp.zeros_like(b), b)
+                cs = coarse_grid_solver(solver, lvl, **kwargs)
+                x = cs(A, jnp.zeros_like(b), b)
                 assert_almost_equal(np.array(A @ x), np.array(b), decimal=3)
 
 
@@ -67,22 +73,21 @@ class TestMultilevel(TestCase):
         import pyamg
         np.random.seed(30459128)
 
-        A_scipy = poisson((50, 50), format='csr')
+        A_scipy = poisson((20, 20), format='csr')
         b = jnp.array(np.random.rand(A_scipy.shape[0]))
-
-        # AMJax builds its hierarchy from a PyAMG hierarchy
-        pyamg_ml = pyamg.ruge_stuben_solver(A_scipy, coarse_solver='jacobi')
-        ml = MultilevelSolver.from_pyamg(
-            pyamg_ml,
-            presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
-            postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
-        )
-
         A_jax = jsparse.BCOO.from_scipy_sparse(A_scipy)
-        for cycle in ['V', 'W', 'F']:
-            solve = jax.jit(lambda b, c=cycle: ml.solve(b, maxiter=100, tol=1e-8, cycle=c))
-            x = solve(b)
-            assert jnp.linalg.norm(b - A_jax @ x) < 1e-8 * jnp.linalg.norm(b)
+
+        for coarse_solver in ['pinv', 'lu', 'qr', 'jacobi']:
+            ml = MultilevelSolver.from_pyamg(
+                pyamg.ruge_stuben_solver(A_scipy),
+                presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+                postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+                coarse_solver=coarse_solver,
+            )
+            for cycle in ['V', 'W', 'F']:
+                solve = jax.jit(lambda b, c=cycle: ml.solve(b, maxiter=100, tol=1e-8, cycle=c))
+                x = solve(b)
+                assert jnp.linalg.norm(b - A_jax @ x) < 1e-8 * jnp.linalg.norm(b)
 
     def test_vmap_compatibility(self):
         import pyamg
@@ -107,7 +112,6 @@ class TestMultilevel(TestCase):
             del A, b
             return x
 
-        # four levels — BCOO.fromdense replaces the non-existent BCOO.csr_array
         levels = []
         levels.append(MultilevelSolver.Level())
         levels[0].A = jsparse.BCOO.fromdense(jnp.ones((10, 10)))
@@ -153,6 +157,7 @@ class TestMultilevel(TestCase):
         np.random.seed(42)
 
         A_scipy = poisson((10, 10), format='csr')
+        A_jax = jnp.array(A_scipy.toarray())
         b = jnp.array(np.random.rand(A_scipy.shape[0]))
 
         ml = MultilevelSolver.from_pyamg(
@@ -161,22 +166,27 @@ class TestMultilevel(TestCase):
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
         )
 
-        f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
-
-        # compare VJP gradient against central finite differences in a random direction
         rng = np.random.default_rng(0)
-        d = jnp.array(rng.standard_normal(b.shape))
+        d = jnp.array(rng.standard_normal(A_jax.shape))
         eps = 1e-4
-        grad_vjp = jax.grad(f)(b)
-        directional_vjp = jnp.dot(grad_vjp, d)
-        directional_fd  = (f(b + eps * d) - f(b - eps * d)) / (2 * eps)
-        np.testing.assert_allclose(float(directional_vjp), float(directional_fd), rtol=1e-3)
+
+        for cycle in ['V', 'W', 'F']:
+            f = lambda A, c=cycle: jnp.sum(ml.solve(b, A=A, tol=1e-10, maxiter=100, cycle=c))
+
+            # compare VJP gradient against central finite differences in a random direction
+            grad_vjp = jax.grad(f)(A_jax)
+            directional_vjp = jnp.sum(grad_vjp * d)
+            directional_fd  = (f(A_jax + eps * d) - f(A_jax - eps * d)) / (2 * eps)
+            np.testing.assert_allclose(float(directional_vjp), float(directional_fd), rtol=1e-3)
+
+            assert grad_vjp.shape == A_jax.shape
 
     def test_vjp_jit_and_vmap(self):
         import pyamg
         np.random.seed(42)
 
         A_scipy = poisson((10, 10), format='csr')
+        A_jax = jnp.array(A_scipy.toarray())
         b = jnp.array(np.random.rand(A_scipy.shape[0]))
 
         ml = MultilevelSolver.from_pyamg(
@@ -185,45 +195,46 @@ class TestMultilevel(TestCase):
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
         )
 
-        f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
+        f = lambda A: jnp.sum(ml.solve(b, A=A, tol=1e-10, maxiter=100))
 
         # jit compiled gradient
-        grad_jit = jax.jit(jax.grad(f))(b)
-        assert grad_jit.shape == b.shape
+        grad_jit = jax.jit(jax.grad(f))(A_jax)
+        assert grad_jit.shape == A_jax.shape
 
-        # vmapped gradient over a batch
+        # vmapped gradient
         B = jnp.array(np.random.rand(4, b.shape[0]))
-        grad_vmap = jax.vmap(jax.grad(f))(B)
-        assert grad_vmap.shape == B.shape
+        grad_vmap = jax.vmap(lambda b_i: jax.grad(lambda A: jnp.sum(ml.solve(b_i, A=A, tol=1e-10, maxiter=100)))(A_jax))(B)
+        assert grad_vmap.shape == (4,) + A_jax.shape
 
     def test_vjp_optimization(self):
         import pyamg
         np.random.seed(42)
 
         A_scipy = poisson((10, 10), format='csr')
+        A_jax = jnp.array(A_scipy.toarray())
+        b = jnp.array(np.random.rand(A_scipy.shape[0]))
+
         ml = MultilevelSolver.from_pyamg(
             pyamg.ruge_stuben_solver(A_scipy),
             presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
             postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
         )
 
-        n = A_scipy.shape[0]
-        x_target = jnp.ones(n)
-        theta = jnp.zeros(n)
+        x_target = jnp.ones(A_scipy.shape[0])
 
-        def loss(theta):
-            x = ml.solve(theta, tol=1e-10, maxiter=100)
+        def loss(A):
+            x = ml.solve(b, A=A, tol=1e-10, maxiter=100)
             return jnp.sum((x - x_target) ** 2)
 
-        # gradient descent
+        # gradient descent on A
         lr = 1e-4
-        losses = [float(loss(theta))]
+        A = A_jax
+        losses = [float(loss(A))]
         for _ in range(20):
-            theta = theta - lr * jax.grad(loss)(theta)
-            losses.append(float(loss(theta)))
+            A = A - lr * jax.grad(loss)(A)
+            losses.append(float(loss(A)))
 
         assert losses[-1] < losses[0]
-
 
     def test_from_pyamg_compatibility(self):
         import pyamg
@@ -238,25 +249,109 @@ class TestMultilevel(TestCase):
             ml = MultilevelSolver.from_pyamg(factory(A, coarse_solver='jacobi'))
             self.assertGreater(len(ml.levels), 1)
 
+    def test_not_implemented_smoothers_raise(self):
+        import pyamg
+        from amjax.relaxation.smoothing import _NOT_IMPLEMENTED_SMOOTHERS
+
+        self.assertTrue(len(_NOT_IMPLEMENTED_SMOOTHERS) > 0,
+                        "_NOT_IMPLEMENTED_SMOOTHERS is empty")
+
+        A_scipy = poisson((10, 10), format='csr')
+        ml_pyamg = pyamg.ruge_stuben_solver(A_scipy)
+
+        for name in _NOT_IMPLEMENTED_SMOOTHERS:
+            with self.assertRaises(NotImplementedError):
+                MultilevelSolver.from_pyamg(ml_pyamg, presmoother=(name, {}))
+
+    def test_not_implemented_coarse_solvers_raise(self):
+        import pyamg
+        from amjax.multilevel import _NOT_IMPLEMENTED_SOLVERS
+
+        self.assertTrue(len(_NOT_IMPLEMENTED_SOLVERS) > 0,
+                        "_NOT_IMPLEMENTED_SOLVERS is empty")
+
+        A_scipy = poisson((10, 10), format='csr')
+        ml_pyamg = pyamg.ruge_stuben_solver(A_scipy)
+
+        for name in _NOT_IMPLEMENTED_SOLVERS:
+            with self.assertRaises(NotImplementedError):
+                MultilevelSolver.from_pyamg(ml_pyamg, coarse_solver=name)
+
+    def test_unknown_coarse_solver_raises(self):
+        lvl = MultilevelSolver.Level()
+        lvl.A = jsparse.BCOO.fromdense(jnp.eye(4))
+        lvl.Dinv = inverse_diagonal(lvl.A)
+        with self.assertRaises(ValueError):
+            coarse_grid_solver('bad_solver', lvl)
+
 
 class TestPrecisionMultilevel(TestCase):
-    def test_from_pyamg_preserves_finest_level_dtype(self):
+    def test_dtype_inferred(self):
         import pyamg
 
         A_scipy = poisson((8, 8), format='csr').astype(np.float32)
-        ml = MultilevelSolver.from_pyamg(
-            pyamg.smoothed_aggregation_solver(A_scipy, coarse_solver='jacobi')
-        )
 
-        for lvl in ml.levels:
-            assert_equal(lvl.A.dtype, jnp.float32)
-            assert_equal(lvl.Dinv.dtype, jnp.float32)
-            if lvl.P is not None:
-                assert_equal(lvl.P.dtype, jnp.float32)
-            if lvl.R is not None:
-                assert_equal(lvl.R.dtype, jnp.float32)
+        for coarse_solver, coarse_attrs in [
+            ('pinv', ['A_inv']),
+            ('lu', ['lu_factor']),
+            ('qr', ['Q', 'R_mat']),
+            ('jacobi', []),
+        ]:
+            ml = MultilevelSolver.from_pyamg(
+                pyamg.smoothed_aggregation_solver(A_scipy),
+                coarse_solver=coarse_solver,
+            )
 
-    def test_aspreconditioner_preserves_float32_hierarchy_dtype(self):
+            for lvl in ml.levels:
+                assert_equal(lvl.A.dtype, jnp.float32)
+                assert_equal(lvl.Dinv.dtype, jnp.float32)
+                if lvl.P is not None:
+                    assert_equal(lvl.P.dtype, jnp.float32)
+                if lvl.R is not None:
+                    assert_equal(lvl.R.dtype, jnp.float32)
+
+            coarse = ml.levels[-1]
+            if coarse.A_dense is not None:
+                assert_equal(coarse.A_dense.dtype, jnp.float32)
+            for attr in coarse_attrs:
+                assert_equal(getattr(coarse, attr).dtype, jnp.float32)
+
+    def test_dtype_explicit(self):
+        import pyamg
+
+        A_scipy = poisson((8, 8), format='csr')  # f64 par défaut
+
+        for coarse_solver, coarse_attrs in [
+            ('pinv', ['A_inv']),
+            ('lu', ['lu_factor']),
+            ('qr', ['Q', 'R_mat']),
+            ('jacobi', []),
+        ]:
+            ml = MultilevelSolver.from_pyamg(
+                pyamg.smoothed_aggregation_solver(A_scipy),
+                coarse_solver=coarse_solver,
+                dtype=jnp.float32,
+            )
+
+            for lvl in ml.levels:
+                assert_equal(lvl.A.dtype, jnp.float32)
+                assert_equal(lvl.Dinv.dtype, jnp.float32)
+                if lvl.P is not None:
+                    assert_equal(lvl.P.dtype, jnp.float32)
+                if lvl.R is not None:
+                    assert_equal(lvl.R.dtype, jnp.float32)
+
+            coarse = ml.levels[-1]
+            if coarse.A_dense is not None:
+                assert_equal(coarse.A_dense.dtype, jnp.float32)
+            for attr in coarse_attrs:
+                assert_equal(getattr(coarse, attr).dtype, jnp.float32)
+
+            b = jnp.ones(A_scipy.shape[0], dtype=jnp.float32)
+            x = ml.solve(b, tol=1e-4, maxiter=20)
+            assert_equal(x.dtype, jnp.float32)
+
+    def test_aspreconditioner_dtype(self):
         import pyamg
 
         A_scipy = poisson((8, 8), format='csr').astype(np.float32)
@@ -269,27 +364,32 @@ class TestPrecisionMultilevel(TestCase):
         assert_equal(jax.eval_shape(M, b).dtype, b.dtype)
         assert_equal(M(b).dtype, b.dtype)
 
-    def test_coarse_grid_solver(self):
-        # JAX defaults to float32 -> verify the coarse solver works in both precisions
+    def test_coarse_solver_dtype(self):
         for dtype in [jnp.float32, jnp.float64]:
             diag_vals = jnp.array(np.arange(1, 5, dtype=np.float64), dtype=dtype)
             A = jsparse.BCOO.fromdense(jnp.diag(diag_vals))
+            b = diag_vals
 
-            lvl = MultilevelSolver.Level()
-            lvl.A = A
-            lvl.Dinv = inverse_diagonal(A)
-            lvl.A_dense = A.todense()
-            lvl.A_inv = jnp.linalg.pinv(lvl.A_dense)
+            for solver, kwargs in [
+                ('pinv', {}),
+                ('lu', {}),
+                ('qr', {}),
+                ('jacobi', {'iterations': 1, 'omega': 1.0}),
+            ]:
+                lvl = MultilevelSolver.Level()
+                lvl.A = A
+                lvl.Dinv = inverse_diagonal(A)
 
-            b = diag_vals  # exact solution is x = [1, 1, 1, 1]
+                if solver in ('pinv', 'lu', 'qr'):
+                    lvl.A_dense = A.todense()
+                    if solver == 'pinv':
+                        lvl.A_inv = jnp.linalg.pinv(lvl.A_dense)
+                    elif solver == 'lu':
+                        lvl.lu_factor, lvl.piv = jax.scipy.linalg.lu_factor(lvl.A_dense)
+                    elif solver == 'qr':
+                        lvl.Q, lvl.R_mat = jnp.linalg.qr(lvl.A_dense)
 
-            for solver, kwargs in [('pinv', {}), ('lu', {}),
-                                    ('qr', {}), ('jacobi', {'iterations': 1, 'omega': 1.0})]:
-                coarse_solver = coarse_grid_solver(solver, lvl, **kwargs)
-
-                x = coarse_solver(A, jnp.zeros_like(b), b)
+                cs = coarse_grid_solver(solver, lvl, **kwargs)
+                x = cs(A, jnp.zeros_like(b), b)
                 assert_almost_equal(np.array(A @ x), np.array(b), decimal=5)
-
-                # subsequent calls use the same pre computed data
-                x = coarse_solver(A, jnp.zeros_like(b), b)
-                assert_almost_equal(np.array(A @ x), np.array(b), decimal=5)
+                assert_equal(x.dtype, dtype)

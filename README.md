@@ -29,12 +29,12 @@ but we will soon add the package to PyPi 🙃.
 import pyamg
 import jax
 import jax.numpy as jnp
-from amjax import AMJAXSolver
+from amjax import MultilevelSolver
 
 A  = pyamg.gallery.poisson((100, 100), format="csr")
 b  = jnp.ones(A.shape[0])
 
-ml = AMJAXSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
+ml = MultilevelSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
 
 solve = jax.jit(lambda b: ml.solve(b, tol=1e-10, maxiter=100))
 x = solve(b)
@@ -42,7 +42,7 @@ x = solve(b)
 
 ### Preconditioning
 
-`AMJAXSolver` exposes a preconditioner compatible with any JAX Krylov solver:
+`MultilevelSolver` exposes a preconditioner compatible with any JAX Krylov solver:
 
 ```python
 from jax.experimental import sparse as jsparse
@@ -66,15 +66,16 @@ X = solve_batch(B)
 ### Differentiation solve with `jax.grad`
 
 ```python
-f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
-grad = jax.grad(f)(b)
+A_dense = jnp.array(A.toarray())
+f = lambda A: jnp.sum(ml.solve(b, A=A, tol=1e-10, maxiter=100))
+grad = jax.grad(f)(A_dense)
 ```
 
 ### Differentiation with preconditioning
 
 ```python
-f = lambda b: jnp.sum(jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10)[0])
-grad = jax.grad(f)(b)
+f = lambda A: jnp.sum(jax.scipy.sparse.linalg.cg(A, b, M=M, tol=1e-10)[0])
+grad = jax.grad(f)(A_dense)
 ```
 
 ## Features
@@ -88,7 +89,7 @@ grad = jax.grad(f)(b)
 
 ## Solvers
 
-`AMJAXSolver.from_pyamg` accepts any hierarchy produced by a PyAMG factory:
+`MultilevelSolver.from_pyamg` accepts any hierarchy produced by a PyAMG factory:
 
 | Factory | Intended for |
 |---------|--------------|
@@ -98,11 +99,11 @@ grad = jax.grad(f)(b)
 | `pyamg.ruge_stuben_solver` | General SPD systems, classical C/F splitting |
 | `pyamg.air_solver` | Non-symmetric systems |
 
-**Current limitations:** V-cycle only. `jacobi` coarse solver only.
+**Current limitations:** `jacobi` smoother only.
 
 ## Benchmark
 
-For JAX methods, reported times are solve times only (JIT compilation excluded).
+JAX solve times exclude JIT compilation.
 
 | | |
 |---|---|
@@ -110,28 +111,28 @@ For JAX methods, reported times are solve times only (JIT compilation excluded).
 | Coarse solver | `pinv` |
 | Cycle | V |
 | Smoother | Jacobi |
-| n | 1,000 |
+| n | 500 |
 | dtype | f64 |
 | tol | 1e-10 |
 | maxiter | 100 |
 | Residual | ‖b − Ax‖ / ‖b‖ |
 
 
-- **Single solve** (1 RHS, seconds)
+- **Single solve** (1 RHS)
 
-| Device | PyAMG | PyAMG + CG | AMJax | AMJax + CG |
-|--------|------:|-----------:|------:|-----------:|
-| CPU    | 1.897 | 1.508      | 0.0003    | 0.0003          |
-| GPU    | —     | —          | 0.118 | 0.091      |
+| Speedup | CPU | GPU |
+|--|----:|----:|
+| AMJax vs PyAMG | 0.39 | 20.7 |
+| AMJax + CG vs PyAMG + CG | 0.42 | 33.0 |
 
-- **Batched solve** (K=64, `jax.vmap`, seconds)
+- **Batched solve** (K=64, `jax.vmap`)
 
-| Device | PyAMG | PyAMG + CG | AMJax | AMJax + CG |
-|--------|------:|-----------:|------:|-----------:|
-| CPU    | 139.4 | 110.7      | 192.4 |          |
-| GPU    | —     | —          | 6.553 | 4.820      |
+| Speedup | CPU | GPU |
+|--|----:|----:|
+| AMJax vs PyAMG | 0.60 | 48.0 |
+| AMJax + CG vs PyAMG + CG | 0.70 | 61.6 |
 
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb)
 
-For a more detailed benchmark, see [amjax-docs-yb9b.vercel.app](https://amjax-docs-yb9b.vercel.app/).
+For a more detailed benchmark, see [fannymissillier.github.io/AMJax-docs](https://fannymissillier.github.io/AMJax-docs/).
