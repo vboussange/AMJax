@@ -120,7 +120,7 @@ class MultilevelSolver(PyAMGMultilevelSolver):
 
         for lvl in self.levels[:-1]:
             if getattr(lvl, "R", None) is None:
-                lvl.R = lvl.P.T.conj()
+                lvl.R = lvl.P.T
 
     @classmethod
     def from_pyamg(
@@ -395,7 +395,7 @@ def _solve_loop(ml, b, tol, maxiter, cycle, cycles_per_level, A=None):
     normb = jnp.linalg.norm(b)
     normb = jnp.where(normb == 0.0, jnp.ones((), dtype=normb.dtype), normb)
     x = jnp.zeros_like(b)
-    normr = normb
+    normr = jnp.linalg.norm(b - A @ x)
 
     def cond(state):
         _, it, normr_ = state
@@ -495,6 +495,7 @@ def _coarse_jacobi(Dinv, iterations=10, omega=1.0):
 def _coarse_pinv(A_inv):
     """Return a coarse-grid solver that applies a precomputed pseudo-inverse."""
     def solve(A, x, b):
+        del A, x
         return A_inv @ b
 
     solve.__name__ = "pinv"
@@ -504,6 +505,7 @@ def _coarse_pinv(A_inv):
 def _coarse_lu(lu, piv):
     """Return a coarse-grid solver using a precomputed LU factorisation."""
     def solve(A, x, b):
+        del A, x
         return jax.scipy.linalg.lu_solve((lu, piv), b)
 
     solve.__name__ = "lu"
@@ -513,6 +515,7 @@ def _coarse_lu(lu, piv):
 def _coarse_qr(Q, R_mat):
     """Return a coarse-grid solver using a precomputed QR factorisation."""
     def solve(A, x, b):
+        del A, x
         return jax.scipy.linalg.solve_triangular(R_mat, Q.T @ b)
 
     solve.__name__ = "qr"
