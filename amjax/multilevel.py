@@ -575,7 +575,6 @@ def _convert_hierarchy(pyamg_solver, dtype=None):
 
     return levels
 
-
 # JAX pytree registration
 # Allows jax.jit, jax.grad, etc. to treat MultilevelSolver as a pytree.
 # _flatten  : decomposes the hierarchy into JAX array leaves + static metadata.

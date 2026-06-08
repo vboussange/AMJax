@@ -28,7 +28,7 @@ def save_results(results, filename):
     results : dict
         Arbitrary dict of benchmark results (lists, nested dicts, scalars).
     filename : str
-        Output filename, e.g. ``"solver_benchmark_ruge_stuben.json"``.
+        Output filename, e.g. "solver_benchmark_ruge_stuben.json".
     """
     out = PLOTS_DIR / filename
     out.write_text(_json.dumps(results, indent=2, cls=_Encoder))

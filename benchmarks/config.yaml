@@ -31,9 +31,9 @@ grid_sizes:
 solvers:
   - smoothed_aggregation
   - rootnode
-  # - pairwise
+  - pairwise
   - ruge_stuben
-  # - air
+  - air
 
 # Solver used at the coarsest grid level.
 # Available in AMJax: jacobi, lu, qr, pinv
