@@ -36,7 +36,7 @@ b  = jnp.ones(A.shape[0])
 
 ml = MultilevelSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
 
-solve = jax.jit(lambda b: ml.solve(b, tol=1e-10, maxiter=100))
+solve = jax.jit(lambda b: ml.solve(b, tol=1e-8, maxiter=250))
 x = solve(b)
 ```
 
@@ -50,7 +50,7 @@ from jax.experimental import sparse as jsparse
 A_jax = jsparse.BCOO.from_scipy_sparse(A)
 M = ml.aspreconditioner(cycle='V')
 
-x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10, maxiter=30)
+x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-8, maxiter=250)
 ```
 
 ### Batched solve with `jax.vmap`
@@ -59,7 +59,7 @@ x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10, maxiter=30)
 import numpy as np
 
 B = jnp.array(np.random.rand(4, A.shape[0]))  # (n_rhs, n)
-solve_batch = jax.jit(jax.vmap(lambda b: ml.solve(b, tol=1e-8, maxiter=100)))
+solve_batch = jax.jit(jax.vmap(lambda b: ml.solve(b, tol=1e-8, maxiter=250)))
 X = solve_batch(B)
 ```
 
@@ -67,7 +67,7 @@ X = solve_batch(B)
 
 ```python
 A_dense = jnp.array(A.toarray())
-f = lambda A: jnp.sum(ml.solve(b, A=A, tol=1e-10, maxiter=100))
+f = lambda A: jnp.sum(ml.solve(b, A=A, tol=1e-8, maxiter=250))
 grad = jax.grad(f)(A_dense)
 ```
 
@@ -113,8 +113,8 @@ JAX solve times exclude JIT compilation.
 | Smoother | Jacobi |
 | n | 500 |
 | dtype | f64 |
-| tol | 1e-10 |
-| maxiter | 100 |
+| tol | 1e-8 |
+| maxiter | 250 |
 | Residual | ‖b − Ax‖ / ‖b‖ |
 
 
