@@ -246,6 +246,49 @@ class TestMultilevel(TestCase):
             atol=1e-10,
         )
 
+    def test_pcg_grad_with_fixed_preconditioner_and_sparsity_values(self):
+        import pyamg
+        np.random.seed(42)
+
+        A_scipy = poisson((5, 5), format='csr')
+        A_jax = jnp.array(A_scipy.toarray())
+        b = jnp.array(np.random.rand(A_scipy.shape[0]))
+
+        ml = MultilevelSolver.from_pyamg(
+            pyamg.ruge_stuben_solver(A_scipy),
+            presmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+            postsmoother=('jacobi', {'iterations': 1, 'withrho': True}),
+        )
+        M = ml.aspreconditioner(cycle='V')
+
+        A_coo = A_scipy.tocoo()
+        rows = jnp.asarray(A_coo.row)
+        cols = jnp.asarray(A_coo.col)
+        values0 = jnp.asarray(A_coo.data)
+
+        def matrix_from_values(values):
+            return jnp.zeros(A_scipy.shape, dtype=values.dtype).at[rows, cols].set(values)
+
+        def objective_values(values):
+            A_values = matrix_from_values(values)
+            x, _ = jax.scipy.sparse.linalg.cg(A_values, b, M=M, tol=1e-8, maxiter=30)
+            return jnp.sum(x)
+
+        def objective_dense(A):
+            x, _ = jax.scipy.sparse.linalg.cg(A, b, M=M, tol=1e-8, maxiter=30)
+            return jnp.sum(x)
+
+        grad_values = jax.grad(objective_values)(values0)
+        grad_dense = jax.grad(objective_dense)(A_jax)
+
+        assert grad_values.shape == values0.shape
+        np.testing.assert_allclose(
+            np.array(grad_values),
+            np.array(grad_dense[rows, cols]),
+            rtol=1e-10,
+            atol=1e-10,
+        )
+
     def test_vjp_optimization(self):
         import pyamg
         np.random.seed(42)
