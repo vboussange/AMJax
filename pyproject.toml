@@ -2,6 +2,12 @@
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
+[dependency-groups]
+docs = [
+    "mkdocstrings-python",
+    "zensical",
+]
+
 [project]
 name = "amjax"
 authors = [
@@ -31,5 +37,5 @@ tests = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/vboussange/AMJax#readme"
+Documentation = "https://vboussange.github.io/AMJax/"
 Source = "https://github.com/vboussange/AMJax"

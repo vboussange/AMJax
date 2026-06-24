@@ -157,6 +157,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Raw benchmark outputs; commit benchmarks/latest_summary.json instead.
+/results/
+
 # mypy
 .mypy_cache/
 .dmypy.json

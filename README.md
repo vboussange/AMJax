@@ -1,8 +1,14 @@
 # AMJax
 
-`AMJax` brings algebraic multigrid (AMG) methods to JAX for solving large-scale linear systems with optimal or near-optimal efficiency. It bridges [`PyAMG`](https://github.com/pyamg/pyamg) with JAX by converting `PyAMG`-constructed hierarchies into `jax.{jit,grad,vmap}`-compatible, multi-level solvers and preconditioners for large sparse linear systems.
+`AMJax` brings algebraic multigrid (AMG) methods to JAX for solving large sparse
+linear systems. It bridges [`PyAMG`](https://github.com/pyamg/pyamg) and JAX by
+converting PyAMG-built hierarchies into `jax.jit`, `jax.vmap`, GPU-compatible,
+and differentiable multilevel solvers and preconditioners.
+
+Documentation: <https://vboussange.github.io/AMJax/>
 
 ## Installation
+
 ```bash
 uv add amjax
 ```
@@ -12,29 +18,31 @@ uv add amjax
 ### Direct solve
 
 ```python
-import pyamg
 import jax
 import jax.numpy as jnp
-from amjax import AMJAXSolver
+import pyamg
 
-A  = pyamg.gallery.poisson((100, 100), format="csr")
-b  = jnp.ones(A.shape[0])
+from amjax import MultilevelSolver
 
-ml = AMJAXSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
+A = pyamg.gallery.poisson((100, 100), format="csr")
+b = jnp.ones(A.shape[0])
 
-solve = jax.jit(lambda b: ml.solve(b, tol=1e-10, maxiter=100))
+ml = MultilevelSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
+
+solve = jax.jit(lambda rhs: ml.solve(rhs, tol=1e-10, maxiter=100, cycle="V"))
 x = solve(b)
 ```
 
 ### Preconditioning
 
-`AMJAXSolver` exposes a preconditioner compatible with any JAX Krylov solver:
+`MultilevelSolver` exposes a preconditioner compatible with JAX Krylov solvers:
 
 ```python
+import jax.scipy.sparse.linalg
 from jax.experimental import sparse as jsparse
 
 A_jax = jsparse.BCOO.from_scipy_sparse(A)
-M = ml.aspreconditioner(cycle='V')
+M = ml.aspreconditioner(cycle="V")
 
 x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10, maxiter=30)
 ```
@@ -42,65 +50,85 @@ x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10, maxiter=30)
 ### Batched solve with `jax.vmap`
 
 ```python
-import numpy as np
-
-B = jnp.array(np.random.rand(4, A.shape[0]))  # (n_rhs, n)
-solve_batch = jax.jit(jax.vmap(lambda b: ml.solve(b, tol=1e-8, maxiter=100)))
+B = jnp.ones((64, A.shape[0]))
+solve_batch = jax.jit(jax.vmap(lambda rhs: ml.solve(rhs, tol=1e-8, maxiter=100)))
 X = solve_batch(B)
 ```
 
 ### Differentiating through the solve with `jax.grad`
 
 ```python
-f = lambda b: jnp.sum(ml.solve(b, tol=1e-10, maxiter=100))
-grad = jax.grad(f)(b)
+def objective(rhs):
+    return jnp.sum(ml.solve(rhs, tol=1e-10, maxiter=100))
+
+grad_b = jax.grad(objective)(b)
 ```
 
-### Differentiation with preconditioning
+## Recommendation
 
-```python
-f = lambda b: jnp.sum(jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10)[0])
-grad = jax.grad(f)(b)
+For 2D Poisson problems, start with a Ruge-Stuben hierarchy, V-cycle, Jacobi
+smoothing, and a `pinv` coarse solve. Use AMJax as a preconditioner for
+conjugate gradient (`AMJax + PCG`) when runtime and convergence both matter.
+Use `f64` for tight residuals; use `f32` only for speed-first workloads. When
+solving many right-hand sides, batch with `jax.vmap` and use `k=64` when memory
+allows.
+
+The detailed benchmark summary is generated from the latest committed
+`benchmarks/latest_summary.json` and published in the
+[benchmark docs](https://vboussange.github.io/AMJax/benchmarks/). The full
+benchmark can be rerun from
+[`benchmarks/benchmark.ipynb`](benchmarks/benchmark.ipynb), or from the shell:
+
+```bash
+benchmarks/run_full_benchmark.sh
 ```
 
 ## Features
 
-- V, W and F cycles compiled with `jax.jit`
+- V, W, and F cycles compiled with `jax.jit`
 - Coarse solvers: `jacobi`, `lu`, `qr`, `pinv`
 - Smoothers: `jacobi`
-- AMG preconditioning for JAX Krylov solvers (e.g. `jax.scipy.sparse.linalg.cg`)
+- AMG preconditioning for JAX Krylov solvers
 - `jax.vmap` support for batched right-hand sides
-- `jax.grad` support through both direct solve and preconditioned Krylov solvers
+- `jax.grad` support through direct solves and preconditioned Krylov solves
 
-## Solvers
+## PyAMG interop
 
-`AMJAXSolver.from_pyamg` accepts any hierarchy produced by a PyAMG factory:
+`MultilevelSolver.from_pyamg` accepts hierarchies produced by PyAMG solver
+factories, including:
 
-| Factory | Intended for |
-|---------|--------------|
-| `pyamg.smoothed_aggregation_solver` | SPD systems, standard aggregation AMG |
-| `pyamg.rootnode_solver` | SPD systems, robust for anisotropic problems |
-| `pyamg.pairwise_solver` | SPD systems, fast setup, weaker convergence |
-| `pyamg.ruge_stuben_solver` | General SPD systems, classical C/F splitting |
+| Factory | Typical use |
+|---------|-------------|
+| `pyamg.ruge_stuben_solver` | Classical AMG, strong Poisson baseline |
+| `pyamg.smoothed_aggregation_solver` | SPD systems, aggregation AMG |
+| `pyamg.rootnode_solver` | SPD systems, robust aggregation variant |
+| `pyamg.pairwise_solver` | Fast setup; use with care for large standalone solves |
 | `pyamg.air_solver` | Non-symmetric systems |
 
-**Current limitations:** V-cycle only. `jacobi` coarse solver only.
+For AMG setup details, use the
+[PyAMG documentation](https://pyamg.readthedocs.io/). AMJax documents only the
+JAX conversion and solve layer.
 
-## Benchmark
+## Limitations
 
-An exhaustive benchmark can be run in Colab: 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb) 
-<!-- And results are reported at XXX -->
+- Hierarchy construction is delegated to PyAMG, so setup happens in Python and
+  is not differentiable through the hierarchy itself.
+- A fully native JAX hierarchy is currently blocked by sparse-sparse Galerkin
+  products such as `P.T @ A @ P`, whose sparsity pattern is not known at JIT
+  trace time.
+- Benchmark speedups combine solver implementation, GPU execution, JIT
+  compilation, and batching, so they are practical comparisons rather than
+  solver-only hardware-controlled comparisons.
+- Precise GPU memory accounting is not yet reported.
+- Pairwise should not be the default standalone hierarchy for large systems;
+  it is safer as a preconditioner.
 
-Some key insights on **speedup gains vs PyAMG-based counterpart**:
+## Roadmap
 
-
-| Scenario | Method | CPU | GPU |
-|----------|--------|----:|----:|
-| Single solve ($Ax=b$, $b \in \mathbb{R}^n$) | AMJax | - | ~16× |
-| Single solve ($Ax=b$, $b \in \mathbb{R}^n$) | AMJax + CG | - | ~17× |
-| Batched solve ($AX=B$, $B \in \mathbb{R}^{n \times K}$, $K=64$, `jax.vmap`) | AMJax | 0.7× | ~21× |
-| Batched solve ($AX=B$, $B \in \mathbb{R}^{n \times K}$, $K=64$, `jax.vmap`) | AMJax + CG | - | ~23× |
-
-
-> Settings: Ruge-Stüben hierarchy, V-cycle, Jacobi smoother, `pinv` coarse solver, $n = 1{,}000$, f64, rtol $= 10^{-10}$, max 100 iterations. JAX times exclude JIT compilation. GPU speedup is relative to the PyAMG CPU counterpart.
+- Add more smoothers and coarse-grid solvers that fit JAX's static compilation
+  model.
+- Investigate native JAX hierarchy construction for the Pairwise case, whose
+  binary prolongator gives a predictable sparsity pattern.
+- Add rigorous GPU memory profiling.
+- Explore complex matrices and additional Krylov/preconditioner combinations
+  when concrete use cases justify the maintenance cost.

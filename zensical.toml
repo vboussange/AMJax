@@ -1,0 +1,53 @@
+[project]
+site_name = "AMJax"
+site_description = "JAX-compatible algebraic multigrid solves built from PyAMG hierarchies."
+site_url = "https://vboussange.github.io/AMJax/"
+site_author = "Victor Boussange and Fanny Missillier"
+docs_dir = "docs"
+site_dir = "site"
+repo_url = "https://github.com/vboussange/AMJax"
+repo_name = "vboussange/AMJax"
+edit_uri = "edit/main/docs/"
+nav = [
+  { "Overview" = "index.md" },
+  { "Quickstart" = "quickstart.md" },
+  { "API reference" = "api.md" },
+  { "Benchmarks" = "benchmarks.md" },
+]
+
+[project.theme]
+features = [
+  "content.code.copy",
+  "navigation.sections",
+  "navigation.tracking",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["."]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "numpy"
+inherited_members = true
+members_order = "source"
+show_bases = false
+show_root_heading = true
+show_source = false
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+
+[project.markdown_extensions.admonition]
+
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.toc]
+permalink = true

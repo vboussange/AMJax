@@ -1,0 +1,85 @@
+{
+  "config_hash": "2dd4c7172c1eb2c996ac5b7bf861514f55405bacd72bef8972544f81cfd32cfb",
+  "generated_at": "2026-06-24T03:48:57+00:00",
+  "recommendations": {
+    "batch_size": 64,
+    "coarse_solver": "pinv",
+    "cycle_type": "V",
+    "dtype_accuracy": "f64",
+    "dtype_speed": "f32",
+    "hierarchy": "ruge_stuben",
+    "poisson_default": "AMJax + PCG",
+    "smoother": "jacobi"
+  },
+  "rows": [
+    {
+      "baseline": "pyamg",
+      "baseline_time_seconds": 0.14615658597904257,
+      "cpu_relative_residual": 8.083555539018861e-09,
+      "cpu_speedup": 0.3882405563345692,
+      "cpu_time_seconds": 0.37645883098593913,
+      "gpu_relative_residual": 8.12187169031542e-09,
+      "gpu_speedup": 20.27407619745543,
+      "gpu_time_seconds": 0.00720903801266104,
+      "grid_size": 500,
+      "method": "AMJax",
+      "scenario": "Single RHS"
+    },
+    {
+      "baseline": "pyamg_pcg",
+      "baseline_time_seconds": 0.14171958298538812,
+      "cpu_relative_residual": 9.57886738237777e-10,
+      "cpu_speedup": 0.42247955641088397,
+      "cpu_time_seconds": 0.33544719699420966,
+      "gpu_relative_residual": 9.581536467407533e-10,
+      "gpu_speedup": 23.457413645852988,
+      "gpu_time_seconds": 0.006041568994987756,
+      "grid_size": 500,
+      "method": "AMJax + PCG",
+      "scenario": "Single RHS"
+    },
+    {
+      "baseline": "pyamg",
+      "baseline_time_seconds": 9.77280632100883,
+      "cpu_relative_residual": 8.115631670612617e-09,
+      "cpu_speedup": 0.6025445178098565,
+      "cpu_time_seconds": 16.21922701501171,
+      "gpu_relative_residual": 8.114426129187152e-09,
+      "gpu_speedup": 32.384348581480765,
+      "gpu_time_seconds": 0.3017756030021701,
+      "grid_size": 500,
+      "method": "AMJax",
+      "scenario": "Batched RHS (vmap)"
+    },
+    {
+      "baseline": "pyamg_pcg",
+      "baseline_time_seconds": 9.130944397009443,
+      "cpu_relative_residual": 9.583189997514737e-10,
+      "cpu_speedup": 0.7006547081476333,
+      "cpu_time_seconds": 13.032017469988205,
+      "gpu_relative_residual": 9.589405832350547e-10,
+      "gpu_speedup": 43.9135717048536,
+      "gpu_time_seconds": 0.2079298959870357,
+      "grid_size": 500,
+      "method": "AMJax + PCG",
+      "scenario": "Batched RHS (vmap)"
+    }
+  ],
+  "schema_version": 1,
+  "selection": {
+    "coarse_solver": "pinv",
+    "cycle_type": "V",
+    "dtype": "f64",
+    "maxiter_solv": 500,
+    "maxiter_vcycle": 250,
+    "smoother": "jacobi",
+    "solver": "ruge_stuben",
+    "tol": 1e-08,
+    "vmap_k": 64
+  },
+  "source": {
+    "result_file_count": 16,
+    "results_dir": "results"
+  },
+  "warnings": []
+}
