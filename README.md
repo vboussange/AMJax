@@ -1,7 +1,7 @@
 # AMJax
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vboussange/AMJax/main/assets/logo.svg" alt="AMJax logo" width="720">
+  <img src="assets/logo.svg" alt="AMJax logo" width="720">
 </p>
 
 [![Tests](https://github.com/vboussange/AMJax/actions/workflows/run_tests.yml/badge.svg)](https://github.com/vboussange/AMJax/actions/workflows/run_tests.yml)
