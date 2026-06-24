@@ -138,7 +138,7 @@ def test_render_markdown_is_deterministic(tmp_path):
     assert "Headline Smoothed Aggregation Numbers" in docs
     assert "PyAMG / AMJax f64" in docs
     assert "Benchmark slice: solve $A X = B$" in readme
-    assert "$X, B \\in \\mathbb{R}^{N \\times m}$" in readme
+    assert "$X, B \\in \\mathbb{R}^{N \\times k}$" in readme
     assert "NVIDIA A100 80GB" in readme
     assert "16.0x" in readme
     assert "the report" not in readme.lower()

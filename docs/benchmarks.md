@@ -34,7 +34,7 @@ Use `f64` for tight residuals; use `f32` only when speed matters more than final
 
 ## Headline Smoothed Aggregation Numbers
 
-Benchmark slice: solve $A X = B$, where $A = A_n \in \mathbb{R}^{N \times N}$ is the 2D five-point Poisson matrix on an $n \times n$ grid with $N = n^2$, and $X, B \in \mathbb{R}^{N \times m}$ ($m = 1$ for a single right-hand side and $m = 64$ for the batched `jax.vmap` rows). Results below use `Smoothed Aggregation`, `V`-cycle, `pinv` coarse solve, `jacobi` smoothing, `f64`, tolerance `1e-08`, and `k=64` for batched solves. AMJax runs on GPU (NVIDIA A100 80GB); PyAMG baselines run on CPU (unspecified).
+Benchmark slice: solve $A X = B$, where $A = A_n \in \mathbb{R}^{N \times N}$ is the 2D five-point Poisson matrix on an $n \times n$ grid with $N = n^2$, and $X, B \in \mathbb{R}^{N \times k}$ ($k = 1$ for a single right-hand side and $k = 64$ for the batched `jax.vmap` rows). Results below use `Smoothed Aggregation`, `V`-cycle, `pinv` coarse solve, `jacobi` smoothing, `f64`, tolerance `1e-08`, and `k=64` for batched solves. AMJax runs on GPU (NVIDIA A100 80GB); PyAMG baselines run on CPU (unspecified).
 
 | Scenario | Method | Grid n (unknowns) | PyAMG CPU baseline | AMJax GPU time | Speedup | Residual |
 |---|---|---:|---:|---:|---:|---:|
