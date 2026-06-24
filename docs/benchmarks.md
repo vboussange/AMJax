@@ -1,9 +1,7 @@
 # Benchmarks
 
 AMJax's benchmark notebook runs 2D Poisson problems across solver methods,
-hierarchies, precision choices, devices, and batch modes. The tables below are
-generated from the latest committed benchmark artifact and should not be edited
-by hand.
+hierarchies, precision choices, devices, and batch modes.
 
 [Open the benchmark notebook in Colab](https://colab.research.google.com/github/vboussange/AMJax/blob/main/benchmarks/benchmark.ipynb).
 

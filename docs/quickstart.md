@@ -82,9 +82,8 @@ def objective_nnz(values):
 grad_values = jax.grad(objective_nnz)(values0)
 ```
 
-The same fixed-pattern idea can be used with a fixed AMJax preconditioner inside
-JAX CG. Here `M` is built once from the original hierarchy and is reused while
-the CG operator changes with the nonzero values.
+The same pattern can be used with a fixed AMJax preconditioner inside
+Krylov-based methods.
 
 ```python
 M = ml.aspreconditioner(cycle="V")
@@ -103,8 +102,4 @@ def objective_nnz_pcg(values):
 grad_values_pcg = jax.grad(objective_nnz_pcg)(values0)
 ```
 
-This is a fixed-preconditioner shortcut: the preconditioner and PyAMG hierarchy
-are not rebuilt as `A_values` changes. In inverse-modelling experiments, we have
-observed that moderate updates to `A_values` can still give smooth convergence
-in practice. If the operator drifts far from the setup matrix, rebuild the
-hierarchy and preconditioner.
+We have observed that this pattern gives smooth convergence in practice for our inverse problems.

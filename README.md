@@ -1,14 +1,14 @@
-# AMJax
-
-<p align="center">
-  <img src="assets/logo.svg" alt="AMJax logo" width="720">
-</p>
 
 [![Tests](https://github.com/vboussange/AMJax/actions/workflows/run_tests.yml/badge.svg)](https://github.com/vboussange/AMJax/actions/workflows/run_tests.yml)
 [![Docs](https://github.com/vboussange/AMJax/actions/workflows/docs.yml/badge.svg)](https://github.com/vboussange/AMJax/actions/workflows/docs.yml)
 [![PyPI](https://img.shields.io/pypi/v/amjax.svg)](https://pypi.org/project/amjax/)
 [![Python](https://img.shields.io/pypi/pyversions/amjax.svg)](https://pypi.org/project/amjax/)
 [![License](https://img.shields.io/github/license/vboussange/AMJax.svg)](https://github.com/vboussange/AMJax/blob/main/LICENSE)
+
+
+<p align="center">
+  <img src="assets/logo.svg" alt="AMJax logo" width="720">
+</p>
 
 `AMJax` brings algebraic multigrid (AMG) methods to JAX for solving large sparse
 linear systems. It bridges [`PyAMG`](https://github.com/pyamg/pyamg) and JAX by
