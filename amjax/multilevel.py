@@ -350,6 +350,13 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         ----------
         b : ndarray
             Right-hand side, length n.
+        A : ndarray or sparse matrix, optional
+            Finest-level operator to use for this solve. This is an AMJax
+            extension, not a PyAMG ``solve`` argument. When supplied, the
+            existing PyAMG-built hierarchy is kept fixed: restriction,
+            prolongation, coarse operators, and coarse solver state are not
+            rebuilt. Only finest-level residuals, smoothing, and matrix-vector
+            products use ``A``.
         x0 : ndarray, optional
             Initial guess.  Defaults to the zero vector.
         tol : float
@@ -366,6 +373,13 @@ class MultilevelSolver(PyAMGMultilevelSolver):
         -------
         ndarray
             Approximate solution to Ax = b.
+
+        Notes
+        -----
+        Passing ``A`` is intended for differentiating or optimizing the
+        finest-level operator while treating the multigrid hierarchy as fixed.
+        If ``A`` changes substantially from the matrix used to build the
+        hierarchy, convergence quality may degrade.
         """
         b = jnp.ravel(jnp.asarray(b))
         if x0 is not None:

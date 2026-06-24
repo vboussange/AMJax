@@ -62,7 +62,8 @@ grad_b = jax.grad(objective)(b)
 
 To differentiate with respect to the stored nonzero entries of the finest-level
 matrix, keep the sparsity pattern fixed and expose only the values as JAX
-variables. The PyAMG hierarchy remains the one built from the original matrix.
+variables. The `A` keyword is an AMJax extension; the PyAMG hierarchy remains
+the one built from the original matrix.
 
 ```python
 A_coo = A.tocoo()
