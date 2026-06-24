@@ -59,3 +59,24 @@ def objective(rhs):
 
 grad_b = jax.grad(objective)(b)
 ```
+
+To differentiate with respect to the stored nonzero entries of the finest-level
+matrix, keep the sparsity pattern fixed and expose only the values as JAX
+variables. The PyAMG hierarchy remains the one built from the original matrix.
+
+```python
+A_coo = A.tocoo()
+rows = jnp.asarray(A_coo.row)
+cols = jnp.asarray(A_coo.col)
+values0 = jnp.asarray(A_coo.data)
+
+def matrix_from_values(values):
+    return jnp.zeros(A.shape, dtype=values.dtype).at[rows, cols].set(values)
+
+def objective_nnz(values):
+    A_values = matrix_from_values(values)
+    x = ml.solve(b, A=A_values, tol=1e-8, maxiter=100, cycle="V")
+    return jnp.sum(x)
+
+grad_values = jax.grad(objective_nnz)(values0)
+```
