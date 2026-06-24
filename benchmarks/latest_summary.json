@@ -2,7 +2,7 @@
   "benchmark": {
     "devices": {
       "amjax_gpu": "NVIDIA A100 80GB",
-      "pyamg_cpu": "EPFL cluster node; exact CPU model not recorded in the report"
+      "pyamg_cpu": "N/A"
     },
     "problem": "2D Poisson equation on an n x n grid",
     "residual_metric": "||b - A x|| / ||b||",

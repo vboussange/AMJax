@@ -98,14 +98,13 @@ def _normalize_result(path: Path) -> dict[str, Any] | None:
     if time_seconds is None:
         return None
 
-    maxiter_vcycle = config.get("maxiter_vcycle", config.get("maxiter_cycle"))
     normalized = {
         "path": str(path),
         "solver": config.get("solver"),
         "coarse_solver": config.get("coarse_solver"),
         "dtype": config.get("dtype"),
         "tol": _as_float(config.get("tol")),
-        "maxiter_vcycle": _as_int(maxiter_vcycle),
+        "maxiter_vcycle": _as_int(config.get("maxiter_vcycle")),
         "maxiter_solv": _as_int(config.get("maxiter_solv")),
         "vmap_k": _as_int(config.get("vmap_k")),
         "cycle_type": config.get("cycle_type"),
@@ -646,7 +645,7 @@ def build_summary(
             "timing": "minimum of 10 timed solves after one JAX warm-up call",
             "devices": {
                 "amjax_gpu": "NVIDIA A100 80GB",
-                "pyamg_cpu": "EPFL cluster node; exact CPU model not recorded in the report",
+                "pyamg_cpu": "N/A",
             },
             "timing_excludes": [
                 "AMG hierarchy construction",
@@ -735,12 +734,16 @@ def _fmt_iter(value: int | None) -> str:
 def _context_sentence(summary: dict[str, Any]) -> str:
     selection = summary["selection"]
     devices = summary["benchmark"]["devices"]
+    vmap_k = selection["vmap_k"]
     return (
-        "Benchmark slice: solve `A_n x = b`, where `A_n` is the 2D five-point "
-        f"Poisson matrix on an `n x n` grid (`N = n^2` unknowns). Results below "
+        "Benchmark slice: solve $A X = B$, where "
+        "$A = A_n \\in \\mathbb{R}^{N \\times N}$ is the 2D five-point Poisson "
+        "matrix on an $n \\times n$ grid with $N = n^2$, and "
+        f"$X, B \\in \\mathbb{{R}}^{{N \\times m}}$ ($m = 1$ for a single right-hand "
+        f"side and $m = {vmap_k}$ for the batched `jax.vmap` rows). Results below "
         f"use `{SOLVER_LABELS[selection['solver']]}`, `{selection['cycle_type']}`-cycle, "
         f"`{selection['coarse_solver']}` coarse solve, `{selection['smoother']}` smoothing, "
-        f"`{selection['dtype']}`, tolerance `{selection['tol']:.0e}`, and `k={selection['vmap_k']}` "
+        f"`{selection['dtype']}`, tolerance `{selection['tol']:.0e}`, and `k={vmap_k}` "
         f"for batched solves. AMJax runs on GPU ({devices['amjax_gpu']}); PyAMG "
         f"baselines run on CPU ({devices['pyamg_cpu']})."
     )
@@ -780,7 +783,7 @@ def render_readme_markdown(summary: dict[str, Any]) -> str:
     ]
     if summary.get("warnings"):
         lines.append("")
-        lines.append("Incomplete benchmark pairs are reported as `n/a`.")
+        lines.append("Incomplete benchmark pairs are shown as `n/a`.")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -924,10 +927,10 @@ def render_docs_markdown(summary: dict[str, Any]) -> str:
         ),
         "",
         (
-            "Pairwise is not shown in the GPU hierarchy comparison because the committed "
-            "report-era raw JSON files do not contain matching Pairwise GPU rows. Treat "
-            "Pairwise as a preconditioner option rather than the default standalone "
-            "large-system solver."
+            "Pairwise is not shown in the GPU hierarchy comparison because matching "
+            "Pairwise GPU benchmark pairs are not present in the committed benchmark "
+            "artifact. Treat Pairwise as a preconditioner option rather than the default "
+            "standalone large-system solver."
         ),
     ]
 

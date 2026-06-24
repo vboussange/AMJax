@@ -30,13 +30,13 @@ Use `f64` for tight residuals; use `f32` only when speed matters more than final
 | Tolerance | `1e-08` on `||b - A x|| / ||b||` |
 | Cycle / coarse solve / smoother | `V` / `pinv` / `jacobi` |
 | Batch size | `k=64` for `jax.vmap` rows |
-| Devices | AMJax on GPU: NVIDIA A100 80GB; PyAMG on CPU: EPFL cluster node; exact CPU model not recorded in the report |
+| Devices | AMJax on GPU: NVIDIA A100 80GB; PyAMG on CPU: N/A |
 | Timing | Minimum of 10 solves after one JAX warm-up call |
 | Excluded from timings | Hierarchy setup, device transfer, first JIT compilation |
 
 ## Headline Smoothed Aggregation Numbers
 
-Benchmark slice: solve `A_n x = b`, where `A_n` is the 2D five-point Poisson matrix on an `n x n` grid (`N = n^2` unknowns). Results below use `Smoothed Aggregation`, `V`-cycle, `pinv` coarse solve, `jacobi` smoothing, `f64`, tolerance `1e-08`, and `k=64` for batched solves. AMJax runs on GPU (NVIDIA A100 80GB); PyAMG baselines run on CPU (EPFL cluster node; exact CPU model not recorded in the report).
+Benchmark slice: solve $A X = B$, where $A = A_n \in \mathbb{R}^{N \times N}$ is the 2D five-point Poisson matrix on an $n \times n$ grid with $N = n^2$, and $X, B \in \mathbb{R}^{N \times m}$ ($m = 1$ for a single right-hand side and $m = 64$ for the batched `jax.vmap` rows). Results below use `Smoothed Aggregation`, `V`-cycle, `pinv` coarse solve, `jacobi` smoothing, `f64`, tolerance `1e-08`, and `k=64` for batched solves. AMJax runs on GPU (NVIDIA A100 80GB); PyAMG baselines run on CPU (N/A).
 
 | Scenario | Method | Grid n (unknowns) | PyAMG CPU baseline | AMJax GPU time | Speedup | Residual |
 |---|---|---:|---:|---:|---:|---:|
@@ -86,7 +86,7 @@ Ratios greater than `1x` mean the method named after the slash is faster. For ex
 | 200 (40,000) | 5.92e-09 | 2.73e-04 | 3.80e-09 | 5.42e-04 |
 | 500 (250,000) | 5.93e-09 | 1.70e-03 | 6.94e-09 | 3.19e-03 |
 
-Pairwise is not shown in the GPU hierarchy comparison because the committed report-era raw JSON files do not contain matching Pairwise GPU rows. Treat Pairwise as a preconditioner option rather than the default standalone large-system solver.
+Pairwise is not shown in the GPU hierarchy comparison because matching Pairwise GPU benchmark pairs are not present in the committed benchmark artifact. Treat Pairwise as a preconditioner option rather than the default standalone large-system solver.
 <!-- END GENERATED BENCHMARK RESULTS -->
 
 The raw benchmark JSON files are intentionally not tracked. Commit the compact

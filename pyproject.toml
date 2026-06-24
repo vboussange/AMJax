@@ -8,6 +8,9 @@ docs = [
     "pymdown-extensions",
     "zensical",
 ]
+dev = [
+    "matplotlib>=3.0.0",
+]
 
 [project]
 name = "amjax"
@@ -29,7 +32,6 @@ dependencies = [
     "numpy>2.0.0",
     "pyamg>=4.0.0",
     "scipy>=1.11.0",
-    "matplotlib>=3.0.0",
 ]
 
 [project.optional-dependencies]

@@ -125,42 +125,6 @@ def test_build_summary_computes_concrete_speedups(tmp_path):
     assert summary["recommendations"]["poisson_default"] == "AMJax + PCG"
 
 
-def test_build_summary_accepts_report_era_maxiter_cycle_key(tmp_path):
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-    payload = {
-        "config": {
-            "solver": "smoothed_aggregation",
-            "coarse_solver": "pinv",
-            "dtype": "f64",
-            "tol": 1e-8,
-            "maxiter_cycle": 250,
-            "maxiter_solv": 500,
-            "vmap_k": 64,
-            "cycle_type": "V",
-            "grid_size": 500,
-            "method": "amjax",
-            "smoother": "jacobi",
-            "mode": "single",
-            "device": "gpu",
-        },
-        "time": 1.0,
-        "residual": 1e-9,
-    }
-    (results_dir / "old.json").write_text(json.dumps(payload))
-    baseline = json.loads(json.dumps(payload))
-    baseline["config"]["method"] = "pyamg"
-    baseline["config"]["device"] = "cpu"
-    baseline["time"] = 10.0
-    (results_dir / "old_baseline.json").write_text(json.dumps(baseline))
-
-    summary = build_summary(results_dir, generated_at="2026-06-24T00:00:00+00:00")
-
-    assert summary["selection"]["tol"] == 1e-8
-    assert summary["selection"]["grid_size"] == 500
-    assert summary["headline_rows"][0]["speedup"] == 10.0
-
-
 def test_render_markdown_is_deterministic(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
@@ -173,9 +137,12 @@ def test_render_markdown_is_deterministic(tmp_path):
     assert "## Speedup Ratios" in docs
     assert "Headline Smoothed Aggregation Numbers" in docs
     assert "PyAMG / AMJax f64" in docs
-    assert "Benchmark slice: solve `A_n x = b`" in readme
+    assert "Benchmark slice: solve $A X = B$" in readme
+    assert "$X, B \\in \\mathbb{R}^{N \\times m}$" in readme
     assert "NVIDIA A100 80GB" in readme
     assert "16.0x" in readme
+    assert "the report" not in readme.lower()
+    assert "the report" not in docs.lower()
 
 
 def test_check_mode_from_summary(tmp_path):
