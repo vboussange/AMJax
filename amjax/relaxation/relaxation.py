@@ -56,8 +56,9 @@ def inverse_diagonal(A):
     division, then masks the result back to zero.
     """
     d = matrix_diagonal(A)
-    safe = jnp.where(d != 0, d, 1.0)
-    return jnp.where(d != 0, 1.0 / safe, 0.0)
+    one = jnp.ones((), dtype=d.dtype)
+    safe = jnp.where(d != 0, d, one)
+    return jnp.where(d != 0, one / safe, jnp.zeros((), dtype=d.dtype))
 
 
 def jacobi(A, x, b, Dinv, iterations=1, omega=1.0):
@@ -88,9 +89,11 @@ def jacobi(A, x, b, Dinv, iterations=1, omega=1.0):
         Updated iterate after iterations sweeps.
     """
 
+    omega = jnp.array(omega, dtype=Dinv.dtype)
+
     def body(_, xk):
         temp = Dinv * (b - A @ xk) + xk
-        return (1.0 - omega) * xk + omega * temp
+        return (1 - omega) * xk + omega * temp
 
     return lax.fori_loop(0, iterations, body, x)
 
