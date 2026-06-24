@@ -1,85 +1,259 @@
 {
+  "benchmark": {
+    "devices": {
+      "amjax_gpu": "NVIDIA A100 80GB",
+      "pyamg_cpu": "EPFL cluster node; exact CPU model not recorded in the report"
+    },
+    "problem": "2D Poisson equation on an n x n grid",
+    "residual_metric": "||b - A x|| / ||b||",
+    "rhs": "Random uniform right-hand side(s), with NumPy seeded to 42 in the notebook",
+    "timing": "minimum of 10 timed solves after one JAX warm-up call",
+    "timing_excludes": [
+      "AMG hierarchy construction",
+      "host-to-device transfer",
+      "the first JIT compilation call"
+    ],
+    "unknowns": "N = n^2"
+  },
   "config_hash": "2dd4c7172c1eb2c996ac5b7bf861514f55405bacd72bef8972544f81cfd32cfb",
-  "generated_at": "2026-06-24T03:48:57+00:00",
+  "generated_at": "2026-06-24T05:01:33+00:00",
+  "headline_rows": [
+    {
+      "baseline_device": "cpu",
+      "baseline_method": "PyAMG",
+      "baseline_time_seconds": 0.4526302620070055,
+      "grid_size": 500,
+      "method": "AMJax",
+      "n_iter": 40,
+      "relative_residual": 5.931908570040904e-09,
+      "scenario": "Single RHS",
+      "speedup": 30.983921618988305,
+      "target_device": "gpu",
+      "target_time_seconds": 0.014608553028665483,
+      "unknowns": 250000
+    },
+    {
+      "baseline_device": "cpu",
+      "baseline_method": "PyAMG + PCG",
+      "baseline_time_seconds": 0.3973334780021105,
+      "grid_size": 500,
+      "method": "AMJax + PCG",
+      "n_iter": 40,
+      "relative_residual": 6.9430688008742275e-09,
+      "scenario": "Single RHS",
+      "speedup": 55.612704731051906,
+      "target_device": "gpu",
+      "target_time_seconds": 0.00714465300552547,
+      "unknowns": 250000
+    },
+    {
+      "baseline_device": "cpu",
+      "baseline_method": "PyAMG",
+      "baseline_time_seconds": 29.306136381987017,
+      "grid_size": 500,
+      "method": "AMJax",
+      "n_iter": null,
+      "relative_residual": 5.917686691149703e-09,
+      "scenario": "Batched RHS (vmap)",
+      "speedup": 38.00233811176874,
+      "target_device": "gpu",
+      "target_time_seconds": 0.7711666660034098,
+      "unknowns": 250000
+    },
+    {
+      "baseline_device": "cpu",
+      "baseline_method": "PyAMG + PCG",
+      "baseline_time_seconds": 18.397132167010568,
+      "grid_size": 500,
+      "method": "AMJax + PCG",
+      "n_iter": null,
+      "relative_residual": 6.97473069594944e-09,
+      "scenario": "Batched RHS (vmap)",
+      "speedup": 62.33121588106451,
+      "target_device": "gpu",
+      "target_time_seconds": 0.2951511839928571,
+      "unknowns": 250000
+    }
+  ],
+  "hierarchy_rows": [
+    {
+      "amjax_n_iter": 13,
+      "amjax_pcg_n_iter": 13,
+      "amjax_pcg_residual": 9.581536467407533e-10,
+      "amjax_pcg_speedup": 23.457413645852988,
+      "amjax_pcg_time_seconds": 0.006041568994987756,
+      "amjax_residual": 8.12187169031542e-09,
+      "amjax_speedup": 20.27407619745543,
+      "amjax_time_seconds": 0.00720903801266104,
+      "grid_size": 500,
+      "maxiter_vcycle": 250,
+      "solver": "ruge_stuben",
+      "solver_label": "Ruge-Stuben",
+      "unknowns": 250000
+    },
+    {
+      "amjax_n_iter": 40,
+      "amjax_pcg_n_iter": 40,
+      "amjax_pcg_residual": 6.9430688008742275e-09,
+      "amjax_pcg_speedup": 55.612704731051906,
+      "amjax_pcg_time_seconds": 0.00714465300552547,
+      "amjax_residual": 5.931908570040904e-09,
+      "amjax_speedup": 30.983921618988305,
+      "amjax_time_seconds": 0.014608553028665483,
+      "grid_size": 500,
+      "maxiter_vcycle": 250,
+      "solver": "smoothed_aggregation",
+      "solver_label": "Smoothed Aggregation",
+      "unknowns": 250000
+    },
+    {
+      "amjax_n_iter": 39,
+      "amjax_pcg_n_iter": 39,
+      "amjax_pcg_residual": 9.413975176064857e-09,
+      "amjax_pcg_speedup": 38.055196129662015,
+      "amjax_pcg_time_seconds": 0.007136767002521083,
+      "amjax_residual": 7.986100032181028e-09,
+      "amjax_speedup": 32.20767678500182,
+      "amjax_time_seconds": 0.014314522995846346,
+      "grid_size": 500,
+      "maxiter_vcycle": 250,
+      "solver": "rootnode",
+      "solver_label": "Root Node",
+      "unknowns": 250000
+    }
+  ],
   "recommendations": {
     "batch_size": 64,
     "coarse_solver": "pinv",
     "cycle_type": "V",
     "dtype_accuracy": "f64",
     "dtype_speed": "f32",
-    "hierarchy": "ruge_stuben",
+    "hierarchy": "smoothed_aggregation",
     "poisson_default": "AMJax + PCG",
     "smoother": "jacobi"
   },
-  "rows": [
-    {
-      "baseline": "pyamg",
-      "baseline_time_seconds": 0.14615658597904257,
-      "cpu_relative_residual": 8.083555539018861e-09,
-      "cpu_speedup": 0.3882405563345692,
-      "cpu_time_seconds": 0.37645883098593913,
-      "gpu_relative_residual": 8.12187169031542e-09,
-      "gpu_speedup": 20.27407619745543,
-      "gpu_time_seconds": 0.00720903801266104,
-      "grid_size": 500,
-      "method": "AMJax",
-      "scenario": "Single RHS"
-    },
-    {
-      "baseline": "pyamg_pcg",
-      "baseline_time_seconds": 0.14171958298538812,
-      "cpu_relative_residual": 9.57886738237777e-10,
-      "cpu_speedup": 0.42247955641088397,
-      "cpu_time_seconds": 0.33544719699420966,
-      "gpu_relative_residual": 9.581536467407533e-10,
-      "gpu_speedup": 23.457413645852988,
-      "gpu_time_seconds": 0.006041568994987756,
-      "grid_size": 500,
-      "method": "AMJax + PCG",
-      "scenario": "Single RHS"
-    },
-    {
-      "baseline": "pyamg",
-      "baseline_time_seconds": 9.77280632100883,
-      "cpu_relative_residual": 8.115631670612617e-09,
-      "cpu_speedup": 0.6025445178098565,
-      "cpu_time_seconds": 16.21922701501171,
-      "gpu_relative_residual": 8.114426129187152e-09,
-      "gpu_speedup": 32.384348581480765,
-      "gpu_time_seconds": 0.3017756030021701,
-      "grid_size": 500,
-      "method": "AMJax",
-      "scenario": "Batched RHS (vmap)"
-    },
-    {
-      "baseline": "pyamg_pcg",
-      "baseline_time_seconds": 9.130944397009443,
-      "cpu_relative_residual": 9.583189997514737e-10,
-      "cpu_speedup": 0.7006547081476333,
-      "cpu_time_seconds": 13.032017469988205,
-      "gpu_relative_residual": 9.589405832350547e-10,
-      "gpu_speedup": 43.9135717048536,
-      "gpu_time_seconds": 0.2079298959870357,
-      "grid_size": 500,
-      "method": "AMJax + PCG",
-      "scenario": "Batched RHS (vmap)"
-    }
-  ],
-  "schema_version": 1,
+  "residual_tables": {
+    "headline_single_gpu": [
+      {
+        "amjax_f32": 1.791681643226184e-05,
+        "amjax_f64": 8.786616079023963e-09,
+        "amjax_pcg_f32": 3.5678462154464796e-05,
+        "amjax_pcg_f64": 2.84969162929188e-09,
+        "grid_size": 50,
+        "unknowns": 2500
+      },
+      {
+        "amjax_f32": 6.974473217269406e-05,
+        "amjax_f64": 9.863290918565495e-09,
+        "amjax_pcg_f32": 0.00015007866022642702,
+        "amjax_pcg_f64": 2.7804857868507756e-09,
+        "grid_size": 100,
+        "unknowns": 10000
+      },
+      {
+        "amjax_f32": 0.0002732816501520574,
+        "amjax_f64": 5.916094369720399e-09,
+        "amjax_pcg_f32": 0.000542141089681536,
+        "amjax_pcg_f64": 3.804155481530508e-09,
+        "grid_size": 200,
+        "unknowns": 40000
+      },
+      {
+        "amjax_f32": 0.0016976138576865196,
+        "amjax_f64": 5.931908570040904e-09,
+        "amjax_pcg_f32": 0.003185609122738242,
+        "amjax_pcg_f64": 6.9430688008742275e-09,
+        "grid_size": 500,
+        "unknowns": 250000
+      }
+    ]
+  },
+  "schema_version": 2,
   "selection": {
     "coarse_solver": "pinv",
     "cycle_type": "V",
     "dtype": "f64",
+    "grid_size": 500,
     "maxiter_solv": 500,
     "maxiter_vcycle": 250,
     "smoother": "jacobi",
-    "solver": "ruge_stuben",
+    "solver": "smoothed_aggregation",
     "tol": 1e-08,
     "vmap_k": 64
   },
   "source": {
-    "result_file_count": 16,
+    "result_file_count": 435,
     "results_dir": "results"
+  },
+  "speedup_tables": {
+    "headline_single_gpu": [
+      {
+        "amjax_f32_over_f64": 0.1603832522347934,
+        "amjax_over_pyamg": 2.433411449317933,
+        "amjax_pcg_f32_over_f64": 1.3878514174828527,
+        "amjax_pcg_over_pyamg_pcg": 2.506745537330174,
+        "grid_size": 50,
+        "unknowns": 2500
+      },
+      {
+        "amjax_f32_over_f64": 0.2147355084343068,
+        "amjax_over_pyamg": 4.82551660208626,
+        "amjax_pcg_f32_over_f64": 1.1254840712787013,
+        "amjax_pcg_over_pyamg_pcg": 4.566053875989869,
+        "grid_size": 100,
+        "unknowns": 10000
+      },
+      {
+        "amjax_f32_over_f64": 0.20294368631650067,
+        "amjax_over_pyamg": 11.232200628799024,
+        "amjax_pcg_f32_over_f64": 1.0568196813705586,
+        "amjax_pcg_over_pyamg_pcg": 13.540260330114638,
+        "grid_size": 200,
+        "unknowns": 40000
+      },
+      {
+        "amjax_f32_over_f64": 0.21530646998026828,
+        "amjax_over_pyamg": 30.983921618988305,
+        "amjax_pcg_f32_over_f64": 1.1535783653552754,
+        "amjax_pcg_over_pyamg_pcg": 55.612704731051906,
+        "grid_size": 500,
+        "unknowns": 250000
+      }
+    ],
+    "headline_vmap_gpu": [
+      {
+        "amjax_f32_over_f64": 0.21583227685072848,
+        "amjax_over_pyamg": 64.02448539907212,
+        "amjax_pcg_f32_over_f64": 1.1789978908398604,
+        "amjax_pcg_over_pyamg_pcg": 63.187703702707594,
+        "grid_size": 50,
+        "unknowns": 2500
+      },
+      {
+        "amjax_f32_over_f64": 0.21740124687754933,
+        "amjax_over_pyamg": 84.83994079492943,
+        "amjax_pcg_f32_over_f64": 1.0926094850601153,
+        "amjax_pcg_over_pyamg_pcg": 80.59764187931964,
+        "grid_size": 100,
+        "unknowns": 10000
+      },
+      {
+        "amjax_f32_over_f64": 0.21633710600105105,
+        "amjax_over_pyamg": 91.69586280758512,
+        "amjax_pcg_f32_over_f64": 1.4075016725598024,
+        "amjax_pcg_over_pyamg_pcg": 114.80575276530065,
+        "grid_size": 200,
+        "unknowns": 40000
+      },
+      {
+        "amjax_f32_over_f64": 0.24025235181644086,
+        "amjax_over_pyamg": 38.00233811176874,
+        "amjax_pcg_f32_over_f64": 1.5116355263882382,
+        "amjax_pcg_over_pyamg_pcg": 62.33121588106451,
+        "grid_size": 500,
+        "unknowns": 250000
+      }
+    ]
   },
   "warnings": []
 }

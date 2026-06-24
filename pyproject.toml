@@ -5,6 +5,7 @@ requires = ["hatchling"]
 [dependency-groups]
 docs = [
     "mkdocstrings-python",
+    "pymdown-extensions",
     "zensical",
 ]
 

@@ -1,9 +1,14 @@
 import json
 
 from benchmarks.update_benchmark_docs import (
+    DOCS_BEGIN_MARKER,
+    DOCS_END_MARKER,
+    README_BEGIN_MARKER,
+    README_END_MARKER,
     build_summary,
     main,
-    render_markdown,
+    render_docs_markdown,
+    render_readme_markdown,
     replace_generated_block,
     write_outputs,
 )
@@ -20,12 +25,14 @@ def _write_result(
     grid_size=100,
     tol=1e-10,
     maxiter_vcycle=100,
+    dtype="f64",
+    solver="smoothed_aggregation",
 ):
     payload = {
         "config": {
-            "solver": "ruge_stuben",
+            "solver": solver,
             "coarse_solver": "pinv",
-            "dtype": "f64",
+            "dtype": dtype,
             "tol": tol,
             "maxiter_vcycle": maxiter_vcycle,
             "maxiter_solv": 500,
@@ -39,11 +46,12 @@ def _write_result(
         },
         "time": time,
         "residual": residual,
+        "n_iter": 13,
     }
     path.write_text(json.dumps(payload))
 
 
-def _write_complete_results(results_dir):
+def _write_complete_results(results_dir, *, grid_size=100):
     for mode in ("single", "vmap"):
         _write_result(
             results_dir / f"pyamg_{mode}_cpu.json",
@@ -51,6 +59,7 @@ def _write_complete_results(results_dir):
             mode=mode,
             device="cpu",
             time=10.0,
+            grid_size=grid_size,
         )
         _write_result(
             results_dir / f"pyamg_pcg_{mode}_cpu.json",
@@ -58,13 +67,7 @@ def _write_complete_results(results_dir):
             mode=mode,
             device="cpu",
             time=8.0,
-        )
-        _write_result(
-            results_dir / f"amjax_{mode}_cpu.json",
-            method="amjax",
-            mode=mode,
-            device="cpu",
-            time=5.0,
+            grid_size=grid_size,
         )
         _write_result(
             results_dir / f"amjax_{mode}_gpu.json",
@@ -72,13 +75,7 @@ def _write_complete_results(results_dir):
             mode=mode,
             device="gpu",
             time=1.0,
-        )
-        _write_result(
-            results_dir / f"amjax_pcg_{mode}_cpu.json",
-            method="amjax_pcg",
-            mode=mode,
-            device="cpu",
-            time=4.0,
+            grid_size=grid_size,
         )
         _write_result(
             results_dir / f"amjax_pcg_{mode}_gpu.json",
@@ -86,22 +83,45 @@ def _write_complete_results(results_dir):
             mode=mode,
             device="gpu",
             time=0.5,
+            grid_size=grid_size,
+        )
+        _write_result(
+            results_dir / f"amjax_{mode}_gpu_f32.json",
+            method="amjax",
+            mode=mode,
+            device="gpu",
+            time=0.25,
+            grid_size=grid_size,
+            dtype="f32",
+            residual=1e-4,
+        )
+        _write_result(
+            results_dir / f"amjax_pcg_{mode}_gpu_f32.json",
+            method="amjax_pcg",
+            mode=mode,
+            device="gpu",
+            time=0.2,
+            grid_size=grid_size,
+            dtype="f32",
+            residual=1e-4,
         )
 
 
-def test_build_summary_computes_speedups(tmp_path):
+def test_build_summary_computes_concrete_speedups(tmp_path):
     results_dir = tmp_path / "results"
     results_dir.mkdir()
     _write_complete_results(results_dir)
 
     summary = build_summary(results_dir, generated_at="2026-06-24T00:00:00+00:00")
 
-    single_amjax = summary["rows"][0]
-    single_pcg = summary["rows"][1]
-    assert single_amjax["cpu_speedup"] == 2.0
-    assert single_amjax["gpu_speedup"] == 10.0
-    assert single_pcg["cpu_speedup"] == 2.0
-    assert single_pcg["gpu_speedup"] == 16.0
+    single_amjax = summary["headline_rows"][0]
+    single_pcg = summary["headline_rows"][1]
+    assert summary["schema_version"] == 2
+    assert single_amjax["speedup"] == 10.0
+    assert single_pcg["speedup"] == 16.0
+    assert summary["speedup_tables"]["headline_single_gpu"][1][
+        "amjax_f32_over_f64"
+    ] == 4.0
     assert summary["recommendations"]["poisson_default"] == "AMJax + PCG"
 
 
@@ -110,7 +130,7 @@ def test_build_summary_accepts_report_era_maxiter_cycle_key(tmp_path):
     results_dir.mkdir()
     payload = {
         "config": {
-            "solver": "ruge_stuben",
+            "solver": "smoothed_aggregation",
             "coarse_solver": "pinv",
             "dtype": "f64",
             "tol": 1e-8,
@@ -137,8 +157,8 @@ def test_build_summary_accepts_report_era_maxiter_cycle_key(tmp_path):
     summary = build_summary(results_dir, generated_at="2026-06-24T00:00:00+00:00")
 
     assert summary["selection"]["tol"] == 1e-8
-    assert summary["selection"]["maxiter_vcycle"] == 250
-    assert summary["rows"][0]["gpu_speedup"] == 10.0
+    assert summary["selection"]["grid_size"] == 500
+    assert summary["headline_rows"][0]["speedup"] == 10.0
 
 
 def test_render_markdown_is_deterministic(tmp_path):
@@ -147,12 +167,15 @@ def test_render_markdown_is_deterministic(tmp_path):
     _write_complete_results(results_dir)
     summary = build_summary(results_dir, generated_at="2026-06-24T00:00:00+00:00")
 
-    rendered = render_markdown(summary)
+    docs = render_docs_markdown(summary)
+    readme = render_readme_markdown(summary)
 
-    assert "## Recommendations" in rendered
-    assert "AMJax + PCG" in rendered
-    assert "10.0x" in rendered
-    assert "16.0x" in rendered
+    assert "## Speedup Ratios" in docs
+    assert "Headline Smoothed Aggregation Numbers" in docs
+    assert "PyAMG / AMJax f64" in docs
+    assert "Benchmark slice: solve `A_n x = b`" in readme
+    assert "NVIDIA A100 80GB" in readme
+    assert "16.0x" in readme
 
 
 def test_check_mode_from_summary(tmp_path):
@@ -160,30 +183,47 @@ def test_check_mode_from_summary(tmp_path):
     results_dir.mkdir()
     _write_complete_results(results_dir)
     docs_path = tmp_path / "benchmarks.md"
+    readme_path = tmp_path / "README.md"
     summary_path = tmp_path / "latest_summary.json"
     docs_path.write_text(
         "# Benchmarks\n\n"
-        "<!-- BEGIN GENERATED BENCHMARK SUMMARY -->\n"
+        f"{DOCS_BEGIN_MARKER}\n"
         "placeholder\n"
-        "<!-- END GENERATED BENCHMARK SUMMARY -->\n"
+        f"{DOCS_END_MARKER}\n"
+    )
+    readme_path.write_text(
+        "# README\n\n"
+        f"{README_BEGIN_MARKER}\n"
+        "placeholder\n"
+        f"{README_END_MARKER}\n"
     )
     summary = build_summary(results_dir, generated_at="2026-06-24T00:00:00+00:00")
-    write_outputs(summary, summary_path=summary_path, docs_path=docs_path)
+    write_outputs(
+        summary,
+        summary_path=summary_path,
+        docs_path=docs_path,
+        readme_path=readme_path,
+    )
 
-    assert main(
-        [
-            "--summary",
-            str(summary_path),
-            "--docs-path",
-            str(docs_path),
-            "--check",
-        ]
-    ) == 0
+    assert (
+        main(
+            [
+                "--summary",
+                str(summary_path),
+                "--docs-path",
+                str(docs_path),
+                "--readme-path",
+                str(readme_path),
+                "--check",
+            ]
+        )
+        == 0
+    )
 
 
 def test_replace_generated_block_requires_markers():
     try:
-        replace_generated_block("no markers", "generated")
+        replace_generated_block("no markers", "generated", DOCS_BEGIN_MARKER, DOCS_END_MARKER)
     except RuntimeError as exc:
         assert "markers" in str(exc)
     else:
