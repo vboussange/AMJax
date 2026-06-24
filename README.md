@@ -1,7 +1,7 @@
 # AMJax
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vboussange/AMJax/main/assets/logo.svg" alt="AMJax logo" width="720">
+  <img src="assets/logo.svg" alt="AMJax logo" width="720">
 </p>
 
 [![Tests](https://github.com/vboussange/AMJax/actions/workflows/run_tests.yml/badge.svg)](https://github.com/vboussange/AMJax/actions/workflows/run_tests.yml)
@@ -39,7 +39,7 @@ b = jnp.ones(A.shape[0])
 
 ml = MultilevelSolver.from_pyamg(pyamg.ruge_stuben_solver(A))
 
-solve = jax.jit(lambda rhs: ml.solve(rhs, tol=1e-8, maxiter=250, cycle="V"))
+solve = jax.jit(lambda rhs: ml.solve(rhs, tol=1e-10, maxiter=100, cycle="V"))
 x = solve(b)
 ```
 
@@ -54,32 +54,24 @@ from jax.experimental import sparse as jsparse
 A_jax = jsparse.BCOO.from_scipy_sparse(A)
 M = ml.aspreconditioner(cycle="V")
 
-x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-8, maxiter=250)
+x, info = jax.scipy.sparse.linalg.cg(A_jax, b, M=M, tol=1e-10, maxiter=30)
 ```
 
 ### Batched solve with `jax.vmap`
 
 ```python
 B = jnp.ones((64, A.shape[0]))
-solve_batch = jax.jit(jax.vmap(lambda rhs: ml.solve(rhs, tol=1e-8, maxiter=250)))
+solve_batch = jax.jit(jax.vmap(lambda rhs: ml.solve(rhs, tol=1e-8, maxiter=100)))
 X = solve_batch(B)
 ```
 
 ### Differentiating through the solve with `jax.grad`
 
 ```python
-A_dense = jnp.array(A.toarray())
-objective = lambda A_matrix: jnp.sum(ml.solve(b, A=A_matrix, tol=1e-8, maxiter=250))
-grad_A = jax.grad(objective)(A_dense)
-```
+def objective(rhs):
+    return jnp.sum(ml.solve(rhs, tol=1e-10, maxiter=100))
 
-### Differentiation with preconditioning
-
-```python
-pcg_objective = lambda A_matrix: jnp.sum(
-    jax.scipy.sparse.linalg.cg(A_matrix, b, M=M, tol=1e-10)[0]
-)
-grad_A_pcg = jax.grad(pcg_objective)(A_dense)
+grad_b = jax.grad(objective)(b)
 ```
 
 ## Benchmark
@@ -105,9 +97,8 @@ speed-first workloads. When solving many right-hand sides, batch with
 `jax.vmap` and use `k=64` when memory allows.
 
 Richer benchmark tables are published in the
-[benchmark docs](https://vboussange.github.io/AMJax/benchmarks/). The committed
-summary artifact is [`benchmarks/latest_summary.json`](benchmarks/latest_summary.json),
-and the full benchmark can be rerun from
+[benchmark docs](https://vboussange.github.io/AMJax/benchmarks/). The full
+benchmark can be rerun from
 [`benchmarks/benchmark.ipynb`](benchmarks/benchmark.ipynb), or from the shell:
 
 ```bash
@@ -138,24 +129,21 @@ factories, including:
 
 For AMG setup details, use the
 [PyAMG documentation](https://pyamg.readthedocs.io/).
-
 ## Limitations
 
 - Hierarchy construction is delegated to PyAMG, so setup happens in Python and
   is not differentiable through the hierarchy itself.
 - A fully native JAX hierarchy is currently blocked by sparse-sparse Galerkin
-  products such as `P.T @ A @ P`, whose sparsity pattern is not known at JAX
+  products such as `P.T @ A @ P`, whose sparsity pattern is not known at JIT
   trace time.
-- Current smoother support is limited to Jacobi.
-- Benchmark timings exclude hierarchy setup, host-to-device transfer, and the
-  first JIT compilation call.
 
-## Roadmap
+<!-- ## Roadmap
 
-- Add more smoothers and coarse-grid solvers where they fit JAX's static
-  compilation model.
-- Investigate native JAX hierarchy construction for cases with predictable
-  prolongator sparsity patterns.
-- Add rigorous GPU memory profiling.
-- Explore complex matrices and additional Krylov/preconditioner combinations
-  as use cases justify the maintenance cost.
+- Add block Jacobi smoothers with blocks fixed at setup time, fixed-degree
+  Richardson/Chebyshev polynomial smoothers, and fixed-iteration CG/GMRES
+  smoothers.
+- Add Cholesky coarse solves for symmetric positive definite coarse operators,
+  plus fixed-iteration CG, GMRES, and BiCGSTAB for coarse levels that are too
+  large for dense direct solves.
+- Add first-class tests and examples for AMJax preconditioning with JAX GMRES
+  and BiCGSTAB, mirroring the existing CG workflow. -->
