@@ -45,11 +45,11 @@ coarse_solvers:
 
 # Convergence tolerance on ||b - Ax|| / ||b||
 tol:
-  - 1.0e-10
+  - 1.0e-8
 
-# Max cycle iterations (V, W, F)
-maxiter_cycle:
-  - 100
+# Max V-cycle iterations
+maxiter_vcycle:
+  - 250
 
 # Max iterations for CG-based methods
 maxiter_solv:
